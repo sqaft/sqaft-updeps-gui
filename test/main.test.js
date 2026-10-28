@@ -20,7 +20,7 @@ function fakeCli(dir, { name = '@sqaft/updeps-cli', apiVersion = 1 } = {}) {
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   fs.writeFileSync(
     path.join(dir, 'package.json'),
-    JSON.stringify({ name, version: '9.9.9', bin: { updeps: './bin/updeps.js' }, exports: { './api': './src/api.js' } })
+    JSON.stringify({ name, version: '9.9.9', type: 'module', bin: { updeps: 'bin/updeps.js' }, exports: { './api': './src/api.js' } })
   );
   fs.writeFileSync(path.join(dir, 'bin', 'updeps.js'), 'console.log(process.argv.slice(2).join(" "));\n');
   fs.writeFileSync(path.join(dir, 'src', 'api.js'), `export const API_VERSION = ${apiVersion};\n`);

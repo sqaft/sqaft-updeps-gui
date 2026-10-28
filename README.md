@@ -36,7 +36,7 @@ updeps gui uninstall  # removes it
 `updeps gui install` puts the app in updeps' own data directory
 (`~/.local/share/sqaft-updeps/app`, `%LOCALAPPDATA%\sqaft-updeps\app` on
 Windows) with npm, so nothing is installed globally. It downloads Electron
-(about 100 MB). Requires Node.js 22+ and updeps 0.1.0 or newer (the first
+during the install (about 100 MB, 350 MB on disk). Requires Node.js 22+ and updeps 0.1.0 or newer (the first
 version with `updeps gui` and the API the app uses).
 
 The app can also be installed on its own with `npm install -g @sqaft/updeps-app`
