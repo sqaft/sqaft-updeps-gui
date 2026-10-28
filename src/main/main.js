@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { app, BrowserWindow, Menu, dialog } from 'electron';
 import { locateCli, loginShellPath, mergePaths, runCli } from './cli.js';
 import { registerScheme, handleProtocol, createWindow } from './window.js';
@@ -93,19 +95,47 @@ function main() {
   }
 
   /**
+   * The CLI install to use: `updeps gui` passes its own in UPDEPS_CLI, and the
+   * app remembers it, so a start at login (which has no UPDEPS_CLI) uses the
+   * same install. Without either, the `updeps` command on PATH is used.
+   * @returns {string|null}
+   */
+  function cliRoot() {
+    const file = path.join(app.getPath('userData'), 'cli.json');
+    if (process.env.UPDEPS_CLI) {
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, JSON.stringify({ root: process.env.UPDEPS_CLI }) + '\n');
+      } catch {
+        /* not remembered; this start still uses it */
+      }
+      return process.env.UPDEPS_CLI;
+    }
+    try {
+      const { root } = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return typeof root === 'string' && fs.existsSync(root) ? root : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Finds the CLI. When it is not on the PATH the app was started with (as
    * from the Dock or a login item), the login shell's PATH is tried too.
    */
   async function relocate() {
     stopWatching?.();
     stopWatching = null;
-    ctx.env = { ...process.env };
+    const root = cliRoot();
+    const base = root ? { ...process.env, UPDEPS_CLI: root } : { ...process.env };
+    ctx.env = base;
     try {
       ctx.cli = await locateCli(ctx.env);
       ctx.cliError = null;
     } catch (err) {
-      const shellPath = loginShellPath(process.env);
-      ctx.env = { ...process.env, PATH: mergePaths(process.env.PATH, shellPath) };
+      // A remembered install that is gone or too old gives way to the one on PATH.
+      const retry = process.env.UPDEPS_CLI ? base : { ...process.env };
+      ctx.env = { ...retry, PATH: mergePaths(process.env.PATH, loginShellPath(process.env)) };
       try {
         ctx.cli = await locateCli(ctx.env);
         ctx.cliError = null;

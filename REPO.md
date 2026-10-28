@@ -9,7 +9,7 @@ It works with the updeps CLI installed on the machine (`sqaft-updeps-cli`, `@sqa
 
 ## Layout
 
-- `bin/updeps-app.js`: the `updeps-app` command; starts Electron detached.
+- `bin/updeps-app.js`: the `updeps-app` command; starts Electron detached. `updeps gui` (the CLI's `src/commands/gui.js`) installs this package into its data directory and runs this file with `UPDEPS_CLI` set; keep the bin name and its options in step with it.
 - `src/main/`: the Electron main process. `main.js` (app lifecycle, single instance, tray actions), `cli.js` (finding the CLI and Node.js, running CLI commands), `ipc.js` (everything the page can call), `window.js` (the window and the `app://updeps/` scheme), `tray.js`, `watch.js` (file watching), `autostart.js` (start at login).
 - `src/preload.cjs`: the `window.updeps` bridge.
 - `src/renderer/`: the page, plain ES modules without a framework; `views/graph.js` is the editor (Cytoscape.js with the dagre layout).

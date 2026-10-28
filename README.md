@@ -24,13 +24,23 @@ updeps of its own, so the two never disagree about the config format.
 
 ## Installation
 
+The updeps CLI installs and opens the app:
+
 ```bash
-npm install -g @sqaft/updeps-cli @sqaft/updeps-app
-updeps-app
+npm install -g @sqaft/updeps-cli
+updeps gui            # offers to install the app the first time, then opens it
+updeps gui install    # installs or updates it
+updeps gui uninstall  # removes it
 ```
 
-Requires Node.js 22+ and the updeps CLI (`@sqaft/updeps-cli`) with its API.
-Installing the app downloads Electron (about 100 MB).
+`updeps gui install` puts the app in updeps' own data directory
+(`~/.local/share/sqaft-updeps/app`, `%LOCALAPPDATA%\sqaft-updeps\app` on
+Windows) with npm, so nothing is installed globally. It downloads Electron
+(about 100 MB). Requires Node.js 22+ and updeps 0.1.0 or newer (the first
+version with `updeps gui` and the API the app uses).
+
+The app can also be installed on its own with `npm install -g @sqaft/updeps-app`
+and started with `updeps-app`.
 
 The window opens and the app stays in the system tray when you close it. To
 start it at login, turn on **Start at login** in the tray menu.
@@ -48,11 +58,13 @@ updeps-app [--hidden] [--foreground]
 
 ### Finding the CLI
 
-The app looks for the `updeps` command on its PATH. Started from the Dock, a
-desktop launcher or at login, an app gets a minimal PATH, so the app also asks
-your login shell for its PATH (macOS, Linux). To use a specific install, set
-`UPDEPS_CLI` to the package directory (for example a working copy of
-`sqaft-updeps-cli`). If no CLI is found, the window says how to install it.
+`updeps gui` tells the app which CLI install opened it (`UPDEPS_CLI`), and the
+app remembers that install for its next starts, including at login. Started
+any other way, it looks for the `updeps` command on its PATH; since an app
+started from the Dock, a desktop launcher or at login gets a minimal PATH, it
+also asks your login shell for its PATH (macOS, Linux). To use a specific
+install, set `UPDEPS_CLI` to its package directory (for example a working copy
+of `sqaft-updeps-cli`). If no CLI is found, the window says how to install it.
 
 ### Start at login
 
@@ -86,6 +98,7 @@ git clone https://github.com/sqaft/sqaft-updeps-app
 cd sqaft-updeps-app
 npm install
 npm start                 # runs the app from the working copy
+UPDEPS_APP=$PWD updeps gui   # opens this working copy through the CLI
 npm test                  # node:test, no Electron needed
 npm run icons             # redraws assets/ (tray and app icons)
 npm run screenshots -- <dir> [view[:repo] ...]   # PNGs of each view, light and dark
