@@ -1,5 +1,6 @@
 // Draws the tray and app icons into assets/ (run with `npm run icons`; the
-// output is committed). The glyph is a small track diagram: one source
+// output is committed): tray images, icon.png (window icon on Windows and
+// Linux) and icon.icns (the macOS app bundle, see src/mac-app.js). The glyph is a small track diagram: one source
 // station whose line splits into two dependents. Shapes are drawn from signed
 // distance functions, so edges are anti-aliased at every size without an
 // image library.
@@ -193,6 +194,45 @@ for (const [state, { plate, glyph: color }] of Object.entries(PLATES)) {
     { shape: g.targets, color: hex(ENAMEL) },
     { shape: g.source, color: hex(AMBER) }
   ]));
+}
+
+// macOS app icon: the same plate on the standard macOS icon grid (a body of
+// about 80% of the canvas), at every size an .icns file holds, as PNG data.
+{
+  const g = glyph(0.62);
+  const layers = [
+    { shape: roundedSquare(1.6, 2.9), color: hex(INK) },
+    { shape: g.track, color: hex(ENAMEL) },
+    { shape: g.targets, color: hex(ENAMEL) },
+    { shape: g.source, color: hex(AMBER) }
+  ];
+  const TYPES = [
+    ['icp4', 16],
+    ['icp5', 32],
+    ['icp6', 64],
+    ['ic07', 128],
+    ['ic08', 256],
+    ['ic09', 512],
+    ['ic10', 1024],
+    ['ic11', 32],
+    ['ic12', 64],
+    ['ic13', 256],
+    ['ic14', 512]
+  ];
+  const rendered = new Map();
+  const entries = TYPES.map(([type, size]) => {
+    if (!rendered.has(size)) rendered.set(size, render(size, layers));
+    const png = rendered.get(size);
+    const head = Buffer.alloc(8);
+    head.write(type, 0, 'ascii');
+    head.writeUInt32BE(png.length + 8, 4);
+    return Buffer.concat([head, png]);
+  });
+  const body = Buffer.concat(entries);
+  const head = Buffer.alloc(8);
+  head.write('icns', 0, 'ascii');
+  head.writeUInt32BE(body.length + 8, 4);
+  write('icon.icns', Buffer.concat([head, body]));
 }
 
 console.log(`Icons written to ${OUT}`);

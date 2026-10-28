@@ -10,10 +10,13 @@ const USAGE = `updeps-app — desktop app for updeps
 
 USAGE
   updeps-app [--hidden] [--foreground]
+  updeps-app --prepare
 
 OPTIONS
   --hidden       start in the system tray without opening the window
   --foreground   stay attached to the terminal and print the app's output
+  --prepare      download Electron and, on macOS, build updeps.app, then exit
+                 (\`updeps gui install\` runs this)
   -h, --help     show this help
   -v, --version  show the version
 `;
@@ -29,14 +32,28 @@ if (args.includes('-v') || args.includes('--version')) {
   console.log(JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   process.exit(0);
 }
-const unknown = args.filter((a) => !['--hidden', '--foreground'].includes(a));
+const unknown = args.filter((a) => !['--hidden', '--foreground', '--prepare'].includes(a));
 if (unknown.length) {
   console.error(`Unknown option: ${unknown[0]}\n\n${USAGE}`);
   process.exit(1);
 }
 
-// The `electron` package exports the path of its binary.
-const electron = createRequire(import.meta.url)('electron');
+// The `electron` package exports the path of its binary, downloading it the
+// first time it is required.
+let electron = createRequire(import.meta.url)('electron');
+
+if (process.platform === 'darwin') {
+  const { ensureMacApp } = await import('../src/mac-app.js');
+  try {
+    electron = ensureMacApp(electron, { log: (line) => console.log(line) });
+  } catch (err) {
+    // The app still runs, only under Electron's name in the Dock.
+    console.error(`Could not prepare updeps.app: ${err.message}`);
+  }
+}
+
+if (args.includes('--prepare')) process.exit(0);
+
 const foreground = args.includes('--foreground');
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;

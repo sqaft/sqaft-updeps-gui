@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, Menu, dialog } from 'electron';
 import { locateCli, loginShellPath, mergePaths, runCli } from './cli.js';
 import { registerScheme, handleProtocol, createWindow } from './window.js';
@@ -10,6 +11,8 @@ import * as autostart from './autostart.js';
 
 registerScheme();
 app.setName('updeps');
+
+const isMac = process.platform === 'darwin';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -51,10 +54,13 @@ function main() {
    * @param {string} [selector] e.g. the target whose run to show
    */
   function showWindow(view, selector) {
+    // On macOS the app is in the Dock and Cmd+Tab while its window is open.
+    if (isMac) app.dock?.show();
     if (!win || win.isDestroyed()) {
       win = createWindow({ view });
       win.on('closed', () => {
         win = null;
+        if (isMac) app.dock?.hide();
       });
       if (selector) win.webContents.once('did-finish-load', () => win?.webContents.send('navigate', { view, selector }));
     } else {
@@ -62,7 +68,7 @@ function main() {
       if (win.isMinimized()) win.restore();
       win.show();
     }
-    if (process.platform === 'darwin') app.focus({ steal: true });
+    if (isMac) app.focus({ steal: true });
     else win.focus();
   }
 
@@ -214,9 +220,14 @@ function main() {
   app.on('before-quit', () => stopWatching?.());
 
   app.whenReady().then(async () => {
-    if (process.platform === 'darwin') {
-      // A tray app: no Dock icon. The menu keeps the edit shortcuts working in text fields.
-      app.dock?.hide();
+    if (isMac) {
+      // A tray app: in the Dock only while the window is open (see showWindow).
+      if (process.argv.includes('--hidden')) app.dock?.hide();
+      // Started from Electron.app rather than updeps.app (npm start): at least the icon is updeps'.
+      if (!process.execPath.includes('/updeps.app/')) {
+        app.dock?.setIcon(fileURLToPath(new URL('../../assets/icon.png', import.meta.url)));
+      }
+      // The menu keeps the edit shortcuts working in text fields.
       Menu.setApplicationMenu(
         Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }])
       );

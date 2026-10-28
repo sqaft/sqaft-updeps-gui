@@ -45,15 +45,23 @@ and started with `updeps-app`.
 The window opens and the app stays in the system tray when you close it. To
 start it at login, turn on **Start at login** in the tray menu.
 
+On macOS the app is in the Dock and Cmd+Tab as **updeps** while its window is
+open. It runs from `updeps.app` in `~/Library/Application Support/updeps`, a copy
+of the Electron.app that npm installs (an APFS clone, so it takes no extra
+space) with updeps' name and icon, signed again locally. It is prepared by
+`updeps gui install` and rebuilt when Electron is updated.
+
 On Linux the tray needs a StatusNotifier/AppIndicator host: KDE, Xfce and most
 desktops have one; on GNOME install the "AppIndicator and KStatusNotifierItem
 Support" extension (Ubuntu ships it).
 
 ```
 updeps-app [--hidden] [--foreground]
+updeps-app --prepare
 
   --hidden       start in the system tray without opening the window
   --foreground   stay attached to the terminal and print the app's output
+  --prepare      download Electron and, on macOS, build updeps.app, then exit
 ```
 
 ### Finding the CLI
@@ -97,7 +105,7 @@ masked before they are shown.
 git clone https://github.com/sqaft/sqaft-updeps-app
 cd sqaft-updeps-app
 npm install
-npm start                 # runs the app from the working copy
+npm start                 # runs the app from the working copy (on macOS under Electron's name)
 UPDEPS_APP=$PWD updeps gui   # opens this working copy through the CLI
 npm test                  # node:test, no Electron needed
 npm run icons             # redraws assets/ (tray and app icons)
