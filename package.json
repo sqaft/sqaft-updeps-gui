@@ -25,7 +25,7 @@
   "type": "module",
   "main": "src/main/main.js",
   "bin": {
-    "updeps-app": "./bin/updeps-app.js"
+    "updeps-app": "bin/updeps-app.js"
   },
   "files": [
     "bin/",
