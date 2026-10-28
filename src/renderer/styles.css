@@ -1,0 +1,714 @@
+/* updeps: a signal-box panel. The dependency graph is the lit track diagram;
+   everything around it stays quiet enamel. Amber means a route is set (a job
+   runs), red means a signal at danger (an open failure). */
+
+@font-face {
+  font-family: 'Overpass';
+  src: url('/fonts/overpass/overpass-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Overpass';
+  src: url('/fonts/overpass/overpass-latin-ext-wght-normal.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Overpass Mono';
+  src: url('/fonts/overpass-mono/overpass-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Overpass Mono';
+  src: url('/fonts/overpass-mono/overpass-mono-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+}
+
+:root {
+  --panel: #dde4dc;
+  --surface: #e9eee8;
+  --raised: #f6f8f5;
+  --ink: #26332d;
+  --ink-muted: #56645c;
+  --rule: #b6c2b9;
+  --amber: #e8a317;
+  --amber-wash: #f6e2b3;
+  --signal: #b8321f;
+  --signal-wash: #f3d3cc;
+  --clear: #2c7a4b;
+
+  --sans: 'Overpass', system-ui, sans-serif;
+  --mono: 'Overpass Mono', ui-monospace, monospace;
+  --step--1: 12px;
+  --step-0: 13.5px;
+  --step-1: 16px;
+  --step-2: 21px;
+  --radius-control: 4px;
+  --radius-plate: 7px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --panel: #1a211d;
+    --surface: #202924;
+    --raised: #27312b;
+    --ink: #d5ddd6;
+    --ink-muted: #94a299;
+    --rule: #3a4740;
+    --amber: #f0b43a;
+    --amber-wash: #4a3a17;
+    --signal: #ff6b57;
+    --signal-wash: #4a231d;
+    --clear: #62c088;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'strip strip'
+    'rail view'
+    'drawer drawer';
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--step-0);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.2;
+}
+h1 {
+  font-size: var(--step-2);
+}
+h2 {
+  font-size: var(--step-1);
+}
+h3 {
+  font-size: var(--step-0);
+}
+p {
+  margin: 0;
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: var(--step--1);
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.error {
+  color: var(--signal);
+  font-weight: 600;
+}
+
+/* ---- lamps: the one recurring indicator ---------------------------------- */
+
+.lamp {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: transparent;
+  vertical-align: -1px;
+}
+.lamp.on {
+  background: var(--clear);
+  border-color: var(--clear);
+}
+.lamp.busy {
+  background: var(--amber);
+  border-color: var(--amber);
+}
+.lamp.danger {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+.lamp.off {
+  border-color: var(--ink-muted);
+}
+
+/* ---- controls ---------------------------------------------------------- */
+
+button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-control);
+  padding: 4px 11px 3px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: var(--surface);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.primary {
+  background: var(--ink);
+  color: var(--panel);
+}
+button.primary:hover:not(:disabled) {
+  background: var(--ink);
+  opacity: 0.88;
+}
+button.danger {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 4px 7px 3px;
+  width: 100%;
+}
+textarea {
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  resize: vertical;
+  min-height: 52px;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-muted);
+  opacity: 0.8;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ink);
+  outline: none;
+}
+input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--ink);
+}
+
+/* ---- strip ------------------------------------------------------------- */
+
+.strip {
+  grid-area: strip;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px 9px;
+  border-bottom: 2px solid var(--ink);
+  background: var(--surface);
+}
+.strip .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: var(--step-1);
+  letter-spacing: -0.01em;
+  width: 164px;
+}
+.strip .brand img {
+  width: 22px;
+  height: 22px;
+}
+.strip .daemon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.strip .counts {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+  font-weight: 600;
+}
+.strip .count.danger {
+  color: var(--signal);
+}
+.strip .actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- rail -------------------------------------------------------------- */
+
+.rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 10px;
+  gap: 2px;
+  border-right: 1.5px solid var(--rule);
+}
+.rail a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px 6px;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+.rail a:hover {
+  background: var(--surface);
+}
+.rail a[aria-current='page'] {
+  background: var(--ink);
+  color: var(--panel);
+}
+.rail .badge {
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--signal);
+}
+.rail a[aria-current='page'] .badge {
+  color: var(--amber);
+}
+.rail .foot {
+  margin-top: auto;
+  padding: 10px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+/* ---- views ------------------------------------------------------------- */
+
+.view {
+  grid-area: view;
+  min-height: 0;
+  overflow: auto;
+}
+.page {
+  padding: 22px 28px 40px;
+  max-width: 980px;
+}
+.page > header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.page > header .actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.section {
+  margin-top: 26px;
+}
+.section > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid var(--rule);
+  margin-bottom: 8px;
+}
+.section > h2 .actions {
+  margin-left: auto;
+}
+.empty {
+  color: var(--ink-muted);
+  padding: 6px 0;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rows > li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.rows > li > .lamp {
+  align-self: center;
+}
+.rows .title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rows .detail {
+  grid-column: 2 / 4;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.rows .tail {
+  grid-column: 2 / 4;
+  margin: 2px 0 0;
+}
+.rows .side {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.rows > li.selectable {
+  cursor: pointer;
+}
+.rows > li.selectable:hover {
+  background: var(--surface);
+}
+.rows > li[aria-selected='true'] {
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+
+pre.output {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  line-height: 1.5;
+  background: var(--raised);
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-control);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  padding: 10px 12px;
+  border-left: 4px solid var(--amber);
+  background: var(--amber-wash);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+.notice.danger {
+  border-left-color: var(--signal);
+  background: var(--signal-wash);
+}
+
+/* ---- dependency graph -------------------------------------------------- */
+
+.graph-view {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'tools inspector'
+    'canvas inspector'
+    'savebar inspector';
+}
+.graph-tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.graph-tools .hint {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: var(--step--1);
+}
+.graph-canvas {
+  grid-area: canvas;
+  position: relative;
+  min-height: 0;
+  margin: 0 16px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-plate);
+  background-color: var(--panel);
+  background-image: radial-gradient(var(--rule) 1px, transparent 1px);
+  background-size: 18px 18px;
+  overflow: hidden;
+}
+.graph-canvas .cy {
+  position: absolute;
+  inset: 0;
+}
+.graph-canvas .banner {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--amber-wash);
+  border: 1.5px solid var(--amber);
+  border-radius: var(--radius-control);
+}
+.graph-canvas .banner span {
+  margin-right: auto;
+}
+.graph-canvas .placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+.savebar {
+  grid-area: savebar;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 14px;
+  min-height: 52px;
+}
+.savebar .messages {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.savebar .error {
+  color: var(--signal);
+  font-weight: 600;
+}
+.savebar .warning {
+  color: var(--ink-muted);
+}
+
+.inspector {
+  grid-area: inspector;
+  overflow: auto;
+  border-left: 1.5px solid var(--rule);
+  background: var(--surface);
+  padding: 18px 18px 40px;
+}
+.inspector > header {
+  margin-bottom: 14px;
+}
+.inspector > header h2 {
+  font-size: var(--step-1);
+  overflow-wrap: anywhere;
+}
+.inspector > header .path {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.inspector .facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  margin-bottom: 14px;
+  font-size: var(--step--1);
+}
+.inspector .facts dt {
+  color: var(--ink-muted);
+}
+.inspector .facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.inspector .group {
+  margin-top: 18px;
+}
+.inspector .group > h3 {
+  margin-bottom: 8px;
+}
+.inspector .links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.inspector .links li {
+  padding: 3px 0;
+}
+.inspector .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 12px;
+}
+.field > .label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.field > .label .reset {
+  margin-left: auto;
+  font-size: var(--step--1);
+}
+.field > .hint {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+.field.set > .label::after {
+  content: '';
+  order: 1;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.checks label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---- history ----------------------------------------------------------- */
+
+.history {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 24px;
+  max-width: none;
+}
+.history .filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.history .filters input {
+  max-width: 220px;
+}
+.history .filters select {
+  width: auto;
+}
+.run-detail h2 {
+  margin-bottom: 4px;
+}
+.run-detail .target {
+  margin-top: 18px;
+}
+.run-detail .target h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.run-detail .target > * + * {
+  margin-top: 6px;
+}
+
+/* ---- log and output ---------------------------------------------------- */
+
+.log-page {
+  max-width: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.log-page pre.output {
+  flex: 1;
+  overflow: auto;
+  white-space: pre;
+}
+
+.drawer {
+  grid-area: drawer;
+  border-top: 2px solid var(--ink);
+  background: var(--surface);
+  max-height: 34vh;
+  display: flex;
+  flex-direction: column;
+}
+.drawer > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+}
+.drawer > header .actions {
+  margin-left: auto;
+}
+.drawer pre.output {
+  margin: 0 16px 12px;
+  overflow: auto;
+  flex: 1;
+}
+
+.setup {
+  max-width: 620px;
+  padding: 60px 28px;
+}
+.setup > * + * {
+  margin-top: 14px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lamp.busy {
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "@sqaft/updeps-app",
+  "version": "0.0.1",
+  "description": "Desktop app for updeps: edit the dependency graph and see the daemon's status and failures in the system tray. macOS, Linux and Windows.",
+  "keywords": [
+    "updeps",
+    "dependencies",
+    "dependency-graph",
+    "polyrepo",
+    "multi-repo",
+    "tray",
+    "electron",
+    "desktop"
+  ],
+  "homepage": "https://github.com/sqaft/sqaft-updeps-app#readme",
+  "bugs": {
+    "url": "https://github.com/sqaft/sqaft-updeps-app/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sqaft/sqaft-updeps-app.git"
+  },
+  "author": "sqaft",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/main/main.js",
+  "bin": {
+    "updeps-app": "./bin/updeps-app.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "assets/"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "icons": "node scripts/icons.js",
+    "screenshots": "electron scripts/screenshots.js",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": {
+    "@fontsource-variable/overpass": "^5.3.0",
+    "@fontsource/overpass-mono": "^5.3.0",
+    "cytoscape": "^3.34.4",
+    "cytoscape-dagre": "^4.0.1",
+    "electron": "^44.10.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
