@@ -56,10 +56,66 @@ export function shortTime(ts) {
     : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-/** Status of a target run -> lamp class and words. */
-export const RUN_STATUS = {
-  committed: { lamp: 'on', label: 'Committed' },
-  unchanged: { lamp: 'off', label: 'Up to date' },
-  skipped: { lamp: 'busy', label: 'Skipped' },
-  failed: { lamp: 'danger', label: 'Failed' }
+/**
+ * How a state reads: its glyph, its word and the class that colours it. The
+ * keys are the link states of `/shared/tree.js` plus the journal's statuses.
+ */
+export const LOOK = {
+  running: { glyph: null, word: 'running', cls: 's-running' },
+  queued: { glyph: '·', word: 'queued', cls: 's-queued' },
+  failed: { glyph: '✕', word: 'failed', cls: 's-failed' },
+  updated: { glyph: '●', word: 'updated', cls: 's-updated' },
+  committed: { glyph: '●', word: 'committed', cls: 's-updated' },
+  same: { glyph: '○', word: 'up to date', cls: 's-same' },
+  unchanged: { glyph: '○', word: 'up to date', cls: 's-same' },
+  skipped: { glyph: '~', word: 'skipped', cls: 's-skipped' },
+  none: { glyph: '–', word: 'no runs', cls: 's-none' }
 };
+
+/** Braille frames of the spinner; app.js turns every `.spin` element. */
+export const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+
+/** A spinner glyph. */
+export const spinner = () => h('span', { class: 'spin' }, SPIN[0]);
+
+/**
+ * The glyph of a state, a spinner while running.
+ * @param {keyof typeof LOOK} kind
+ */
+export const glyph = (kind) => (kind === 'running' ? spinner() : (LOOK[kind] || LOOK.none).glyph);
+
+/**
+ * A box with its title on the border.
+ * @param {string|Node|Array<any>} legend
+ * @param {string|null} cls  extra classes: `failing`, `busy`, `tinted`, `dashed`
+ * @param {...any} children
+ */
+export function box(legend, cls, ...children) {
+  return h('section', { class: `box${cls ? ` ${cls}` : ''}` }, h('h3', { class: 'legend' }, legend), children);
+}
+
+/**
+ * A button with its keyboard key in front: `r retry`.
+ * @param {string|null} key
+ * @param {string} label
+ * @param {(e: Event) => void} onclick
+ * @param {{ cls?: string, disabled?: boolean, title?: string }} [opts]
+ */
+export function keyButton(key, label, onclick, { cls = '', disabled = false, title } = {}) {
+  return h('button', { class: `btn ${cls}`.trim(), onclick, disabled, title }, key ? h('span', { class: 'key' }, key) : null, label);
+}
+
+/** True while a text field has the keyboard, so single-letter shortcuts stay off. */
+export function typing() {
+  const el = document.activeElement;
+  return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+}
+
+/**
+ * A path with the home folder shortened to `~`, as the CLI prints paths.
+ * @param {string} p
+ */
+export const tildify = (p) => String(p ?? '').replace(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)(?=[\\/]|$)/, '~');
+
+/** "5 repos", "1 repo". */
+export const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;

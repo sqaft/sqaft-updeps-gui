@@ -80,7 +80,7 @@ export function createTray(actions) {
 
       items.push(
         { type: 'separator' },
-        { label: 'Open updeps', click: () => actions.open('graph') },
+        { label: 'Open updeps', click: () => actions.open('dependencies') },
         { label: 'Activity', click: () => actions.open('activity') },
         { label: 'History', click: () => actions.open('history') },
         { type: 'separator' },

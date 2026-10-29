@@ -15,7 +15,6 @@ contextBridge.exposeInMainWorld('updeps', {
   editConfig: invoke('config:edit'),
   inspectRepo: invoke('repo:inspect'),
   pickFolder: invoke('dialog:folder'),
-  confirm: invoke('dialog:confirm'),
   readStatus: invoke('status:read'),
   inspectService: invoke('service:inspect'),
   readHistory: invoke('history:read'),

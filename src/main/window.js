@@ -31,10 +31,8 @@ const ROOTS = {
   '/renderer/': path.join(SRC, 'renderer'),
   '/shared/': path.join(SRC, 'shared'),
   '/assets/': ASSETS,
-  '/vendor/cytoscape/': path.join(packageDir('cytoscape'), 'dist'),
-  '/vendor/cytoscape-dagre/': path.join(packageDir('cytoscape-dagre'), 'dist'),
-  '/fonts/overpass/': path.join(packageDir('@fontsource-variable/overpass'), 'files'),
-  '/fonts/overpass-mono/': path.join(packageDir('@fontsource/overpass-mono'), 'files')
+  '/fonts/jetbrains-mono/': path.join(packageDir('@fontsource-variable/jetbrains-mono'), 'files'),
+  '/fonts/martian-mono/': path.join(packageDir('@fontsource-variable/martian-mono'), 'files')
 };
 
 const TYPES = {
@@ -68,7 +66,7 @@ export function registerScheme() {
   ]);
 }
 
-/** Serves the renderer, its modules, fonts and vendor files over `app://updeps/`. */
+/** Serves the renderer, its modules and fonts over `app://updeps/`. */
 export function handleProtocol() {
   protocol.handle('app', async (request) => {
     const url = new URL(request.url);
@@ -100,7 +98,7 @@ export function createWindow({ view } = {}) {
     title: 'updeps',
     show: false,
     icon: process.platform === 'darwin' ? undefined : path.join(ASSETS, 'icon.png'),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1A211D' : '#DDE4DC',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#12110F' : '#F6F3EC',
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,

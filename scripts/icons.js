@@ -1,7 +1,7 @@
 // Draws the tray and app icons into assets/ (run with `npm run icons`; the
 // output is committed): tray images, icon.png (window icon on Windows and
-// Linux) and icon.icns (the macOS app bundle, see src/mac-app.js). The glyph is a small track diagram: one source
-// station whose line splits into two dependents. Shapes are drawn from signed
+// Linux) and icon.icns (the macOS app bundle, see src/mac-app.js). The glyph is a small dependency tree: one source
+// whose line splits into two dependents. Shapes are drawn from signed
 // distance functions, so edges are anti-aliased at every size without an
 // image library.
 import fs from 'node:fs';
@@ -78,7 +78,7 @@ const roundedSquare = (inset, radius) => (x, y) => {
 };
 const union = (...shapes) => (x, y) => Math.min(...shapes.map((s) => s(x, y)));
 
-/** The track glyph, scaled by `k` around the centre. */
+/** The glyph, scaled by `k` around the centre. */
 function glyph(k = 1) {
   const t = (v) => 8 + (v - 8) * k;
   const w = 0.8 * k;
@@ -130,12 +130,12 @@ const hex = (h, alpha = 1) => [
   alpha
 ];
 
-// Palette (matches the renderer's tokens).
-const INK = '#26332D';
-const ENAMEL = '#DDE4DC';
-const AMBER = '#E8A317';
-const SIGNAL = '#C23B2A';
-const STOPPED = '#7D8A83';
+// Palette (matches the renderer's tokens in src/renderer/styles.css).
+const INK = '#1E1C18';
+const PAPER = '#ECE6D8';
+const AMBER = '#FFB547';
+const RED = '#D9442F';
+const STOPPED = '#8C8576';
 const WHITE = '#FFFFFF';
 
 function write(name, png) {
@@ -162,12 +162,12 @@ for (const [name, alpha] of [
   }
 }
 
-// Windows and Linux: the state is the colour of a small signal plate, readable
-// on light and dark taskbars alike.
+// Windows and Linux: the state is the colour of a small plate, readable on
+// light and dark taskbars alike.
 const PLATES = {
-  idle: { plate: INK, glyph: ENAMEL },
+  idle: { plate: INK, glyph: PAPER },
   busy: { plate: AMBER, glyph: INK },
-  failing: { plate: SIGNAL, glyph: WHITE },
+  failing: { plate: RED, glyph: WHITE },
   stopped: { plate: STOPPED, glyph: WHITE }
 };
 for (const [state, { plate, glyph: color }] of Object.entries(PLATES)) {
@@ -185,13 +185,13 @@ for (const [state, { plate, glyph: color }] of Object.entries(PLATES)) {
   }
 }
 
-// App icon: the idle plate with a lit source station.
+// App icon: the idle plate with an amber source.
 {
   const g = glyph(0.72);
   write('icon.png', render(512, [
     { shape: roundedSquare(0.7, 3.4), color: hex(INK) },
-    { shape: g.track, color: hex(ENAMEL) },
-    { shape: g.targets, color: hex(ENAMEL) },
+    { shape: g.track, color: hex(PAPER) },
+    { shape: g.targets, color: hex(PAPER) },
     { shape: g.source, color: hex(AMBER) }
   ]));
 }
@@ -202,8 +202,8 @@ for (const [state, { plate, glyph: color }] of Object.entries(PLATES)) {
   const g = glyph(0.62);
   const layers = [
     { shape: roundedSquare(1.6, 2.9), color: hex(INK) },
-    { shape: g.track, color: hex(ENAMEL) },
-    { shape: g.targets, color: hex(ENAMEL) },
+    { shape: g.track, color: hex(PAPER) },
+    { shape: g.targets, color: hex(PAPER) },
     { shape: g.source, color: hex(AMBER) }
   ];
   const TYPES = [

@@ -1,6 +1,6 @@
-import { h, mount, stripAnsi } from './dom.js';
+import { h, mount, stripAnsi, SPIN, spinner, typing, plural, keyButton } from './dom.js';
 import { summarize, ago } from '/shared/status.js';
-import * as graphView from './views/graph.js';
+import * as dependenciesView from './views/dependencies.js';
 import * as activityView from './views/activity.js';
 import * as historyView from './views/history.js';
 import * as logView from './views/log.js';
@@ -8,13 +8,18 @@ import * as healthView from './views/health.js';
 
 const api = window.updeps;
 
+/** The views, in the order of the menu; the number in front is their key. */
 const VIEWS = {
-  graph: { label: 'Dependencies', module: graphView },
-  activity: { label: 'Activity', module: activityView },
-  history: { label: 'History', module: historyView },
-  log: { label: 'Log', module: logView },
-  health: { label: 'Health check', module: healthView }
+  dependencies: { label: 'dependencies', module: dependenciesView },
+  activity: { label: 'activity', module: activityView },
+  history: { label: 'history', module: historyView },
+  log: { label: 'log', module: logView },
+  health: { label: 'health', module: healthView }
 };
+const NAMES = Object.keys(VIEWS);
+
+/** CLI commands that start or stop the daemon, and how the statusline says they run. */
+const DAEMON_COMMANDS = { start: 'starting', stop: 'stopping', restart: 'restarting', reset: 'resetting' };
 
 /**
  * State shared with the views.
@@ -23,9 +28,21 @@ const VIEWS = {
  * @property {any} ctx       from `api.context()`
  * @property {any} status    from `api.readStatus()`, null when the CLI is missing
  * @property {any} service   from `api.inspectService()`
+ * @property {boolean} busy  a CLI command started from the app is running
+ * @property {string|null} busyCommand  its name (`retry`, `restart`, …)
  * @property {(args: string[]) => Promise<{ code: number|null, output: string }>} run
  * @property {(view: string, selector?: string) => void} go
  * @property {(withService?: boolean) => Promise<void>} refreshStatus
+ */
+
+/**
+ * What a view's `create(root, app)` returns.
+ * @typedef {object} View
+ * @property {(what: string) => void} [onChanged]
+ * @property {(selector: string) => void} [navigate]
+ * @property {(e: KeyboardEvent) => boolean|void} [onKey]  true when it handled the key
+ * @property {string} [hints]   key hints for the statusline
+ * @property {() => void} [destroy]
  */
 
 /** @type {App} */
@@ -34,19 +51,22 @@ const app = {
   ctx: null,
   status: null,
   service: null,
+  busy: false,
+  busyCommand: null,
   run: (args) => api.run(args),
   go,
   refreshStatus
 };
 
+/** @type {View|null} */
 let current = null;
 let currentName = null;
 let serviceCheckedAt = 0;
 
-const strip = document.getElementById('strip');
-const rail = document.getElementById('rail');
+const nav = document.getElementById('nav');
 const viewRoot = document.getElementById('view');
 const drawer = document.getElementById('drawer');
+const statusline = document.getElementById('statusline');
 
 async function refreshStatus(withService = false) {
   if (!app.ctx?.cli) {
@@ -63,63 +83,72 @@ async function refreshStatus(withService = false) {
       app.service = await api.inspectService().catch(() => null);
     }
   }
-  renderStrip();
-  renderRail();
+  renderNav();
+  renderStatusline();
 }
 
-function renderStrip() {
-  const s = summarize(app.status, app.service);
-  const daemon = app.status?.daemon;
-  const lamp = s.problem ? 'danger' : s.state === 'stopped' || s.state === 'unavailable' ? 'off' : s.state === 'busy' ? 'busy' : 'on';
-
-  let text = s.daemon;
-  if (daemon?.running) {
-    text = `Daemon running, watching ${daemon.watchedRepos ?? 0} repos, started ${ago(daemon.startedAt)}`;
-  }
+function counts() {
   const failures = app.status?.openFailures.length || 0;
-  const inFlight = (app.status?.queue.jobs.length || 0) + (app.status?.activeRun ? 1 : 0);
+  const running = app.status?.activeRun ? 1 : 0;
+  const queued = app.status?.queue.jobs.length || 0;
+  return { failures, running, queued };
+}
 
+function renderNav() {
+  const { failures, running, queued } = counts();
   mount(
-    strip,
-    h('div', { class: 'brand' }, h('img', { src: '/assets/icon.png', alt: '' }), 'updeps'),
+    nav,
+    h('div', { class: 'brand' }, 'updeps', h('span', { class: 'cursor', 'aria-hidden': 'true' })),
     h(
       'div',
-      { class: 'daemon' },
-      h('span', { class: `lamp ${lamp}` }),
-      h('span', null, s.problem || text),
-      daemon?.stale ? h('span', { class: 'muted' }, '(code updated; restart to load it)') : null
-    ),
-    h(
-      'div',
-      { class: 'counts' },
-      failures ? h('a', { class: 'count danger', href: '#activity' }, `⚠ ${failures} open failure${failures === 1 ? '' : 's'}`) : null,
-      inFlight ? h('span', { class: 'count' }, `⧗ ${inFlight} in progress`) : null
-    ),
-    app.status
-      ? h(
-          'div',
-          { class: 'actions' },
-          daemon?.running
-            ? h('button', { onclick: () => app.run(['restart']) }, 'Restart daemon')
-            : h('button', { class: 'primary', onclick: () => app.run(['start']) }, 'Start daemon')
+      { class: 'links' },
+      NAMES.map((name, i) =>
+        h(
+          'a',
+          { href: `#${name}`, 'aria-current': name === currentName ? 'page' : null },
+          h('span', { class: 'num' }, String(i + 1)),
+          VIEWS[name].label,
+          name === 'activity' && (failures || running || queued)
+            ? h(
+                'span',
+                { class: 'badges' },
+                failures ? h('span', { class: 'fail', title: plural(failures, 'open failure') }, `✕${failures}`) : null,
+                running || queued ? h('span', { class: 'busy', title: `${running} running, ${queued} queued` }, `◐${running + queued}`) : null
+              )
+            : null
         )
-      : null
+      )
+    )
   );
 }
 
-function renderRail() {
-  const failures = app.status?.openFailures.length || 0;
+function renderStatusline() {
+  const s = summarize(app.status, app.service);
+  const daemon = app.status?.daemon;
+  const { failures, running, queued } = counts();
+  let state;
+  if (!app.status) state = h('span', { class: 'state stopped' }, '○ cli not found');
+  else if (app.busy && DAEMON_COMMANDS[app.busyCommand]) state = h('span', { class: 'state busy' }, spinner(), ` ${DAEMON_COMMANDS[app.busyCommand]}`);
+  else if (daemon?.running) state = h('span', { class: 'state running' }, `● running ${ago(daemon.startedAt).replace(' ago', '')}`);
+  else state = h('span', { class: 'state stopped' }, '○ stopped');
+
   mount(
-    rail,
-    Object.entries(VIEWS).map(([name, view]) =>
-      h(
-        'a',
-        { href: `#${name}`, 'aria-current': name === currentName ? 'page' : null },
-        view.label,
-        name === 'activity' && failures ? h('span', { class: 'badge' }, `⚠${failures}`) : null
-      )
-    ),
-    h('div', { class: 'foot' }, app.ctx?.cli ? `updeps ${app.ctx.cli.version}` : null)
+    statusline,
+    state,
+    daemon?.running ? h('span', null, plural(daemon.watchedRepos ?? 0, 'source')) : null,
+    s.problem ? h('span', { class: 'fail' }, s.problem) : null,
+    app.status ? h('span', { class: failures ? 'fail' : null }, failures ? `✕ ${plural(failures, 'failure')}` : '✓ no failures') : null,
+    app.status && (running || queued) ? h('span', { class: 'busy' }, `◐ ${running} running · ${queued} queued`) : null,
+    daemon?.running && daemon.stale
+      ? h(
+          'span',
+          { class: 'stale' },
+          'new updeps code',
+          h('button', { onclick: () => app.run(['restart']), disabled: app.busy, title: 'Restart the daemon to load it' }, 'R restart')
+        )
+      : null,
+    h('span', { class: 'hints' }, current?.hints || '1–5 switch views'),
+    h('span', { class: 'version' }, app.ctx?.cli ? `updeps ${app.ctx.cli.version}` : 'updeps')
   );
 }
 
@@ -131,15 +160,21 @@ function renderSetup() {
     viewRoot,
     h(
       'div',
-      { class: 'setup' },
-      h('h1', null, 'Connect the updeps CLI'),
-      h('p', null, 'This app works with the updeps CLI installed on this computer, the same one the daemon runs.'),
-      h('p', { class: 'notice danger' }, app.ctx?.error || 'The updeps CLI was not found.'),
-      h('p', null, 'Install it, then check again:'),
-      h('pre', { class: 'output' }, 'npm install -g @sqaft/updeps-cli'),
-      h('p', null, h('button', { class: 'primary', onclick: () => api.relocate() }, 'Check again'))
+      { class: 'setup stack' },
+      h(
+        'section',
+        { class: 'box failing' },
+        h('h3', { class: 'legend' }, 'connect the updeps cli'),
+        h('p', null, 'this app works with the updeps cli installed on this computer, the same one the daemon runs.'),
+        h('p', { class: 'error' }, app.ctx?.error || 'the updeps cli was not found.'),
+        h('p', { class: 'dim' }, 'install it, then check again:'),
+        h('pre', { class: 'output' }, 'npm install -g @sqaft/updeps-cli'),
+        h('div', { class: 'row' }, keyButton(null, 'check again', () => api.relocate(), { cls: 'primary' }))
+      )
     )
   );
+  renderNav();
+  renderStatusline();
 }
 
 /**
@@ -149,14 +184,15 @@ function renderSetup() {
  */
 function go(name, selector) {
   if (!app.ctx?.cli) return renderSetup();
-  if (!VIEWS[name]) name = 'graph';
+  if (!VIEWS[name]) name = 'dependencies';
   if (location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
   if (name !== currentName) {
     current?.destroy?.();
     currentName = name;
     viewRoot.replaceChildren();
     current = VIEWS[name].module.create(viewRoot, app);
-    renderRail();
+    renderNav();
+    renderStatusline();
   }
   if (selector) current?.navigate?.(selector);
 }
@@ -166,16 +202,19 @@ async function onChanged(what) {
     app.ctx = await api.context();
     await refreshStatus(true);
     if (!app.ctx.cli) renderSetup();
-    else go(currentName || location.hash.slice(1) || 'graph');
+    else go(currentName || location.hash.slice(1) || 'dependencies');
     return;
   }
   if (what === 'state' || what === 'tick') await refreshStatus();
   current?.onChanged?.(what);
 }
 
-/** The latest CLI command and its output, shown at the bottom. */
+/** The latest CLI command and its output, at the bottom. The health view shows `doctor` itself. */
 function onCommand(event) {
   if (event.type === 'start') {
+    if (event.args[0] === 'doctor') return;
+    app.busy = true;
+    app.busyCommand = event.args[0];
     drawer.hidden = false;
     drawer.dataset.id = String(event.id);
     mount(
@@ -183,13 +222,15 @@ function onCommand(event) {
       h(
         'header',
         null,
-        h('span', { class: 'lamp busy' }),
-        h('code', null, `updeps ${event.args.join(' ')}`),
-        h('span', { class: 'muted', id: 'drawer-state' }, 'Running'),
-        h('div', { class: 'actions' }, h('button', { onclick: () => (drawer.hidden = true) }, 'Close'))
+        h('span', { class: 's-running', id: 'drawer-glyph' }, spinner()),
+        h('span', { class: 'title' }, `$ updeps ${event.args.join(' ')}`),
+        h('span', { class: 's-running', id: 'drawer-state' }, 'running'),
+        keyButton('esc', 'close', closeDrawer, { cls: 'small' })
       ),
-      h('pre', { class: 'output', id: 'drawer-output' })
+      h('pre', { id: 'drawer-output' })
     );
+    renderStatusline();
+    current?.onChanged?.('busy');
     return;
   }
   if (drawer.dataset.id !== String(event.id)) return;
@@ -198,12 +239,56 @@ function onCommand(event) {
     out.append(stripAnsi(event.text));
     out.scrollTop = out.scrollHeight;
   } else if (event.type === 'end') {
+    app.busy = false;
+    app.busyCommand = null;
     const ok = event.code === 0;
-    drawer.querySelector('.lamp').className = `lamp ${ok ? 'on' : 'danger'}`;
-    drawer.querySelector('#drawer-state').textContent = ok ? 'Finished' : `Failed (exit code ${event.code ?? 'none'})`;
+    const cls = ok ? 's-updated' : 's-failed';
+    mount(drawer.querySelector('#drawer-glyph'), ok ? '✓' : '✕');
+    drawer.querySelector('#drawer-glyph').className = cls;
+    const state = drawer.querySelector('#drawer-state');
+    state.className = cls;
+    state.textContent = ok ? 'finished' : `failed (exit code ${event.code ?? 'none'})`;
     refreshStatus(true);
+    current?.onChanged?.('busy');
   }
 }
+
+function closeDrawer() {
+  drawer.hidden = true;
+}
+
+function onKey(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey) {
+    if (current?.onKey?.(e)) e.preventDefault();
+    return;
+  }
+  if (current?.onKey?.(e)) {
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Escape' && !drawer.hidden) {
+    closeDrawer();
+    return;
+  }
+  if (typing()) return;
+  const index = Number(e.key) - 1;
+  if (Number.isInteger(index) && NAMES[index]) {
+    e.preventDefault();
+    go(NAMES[index]);
+  } else if (e.key === 'R' && app.status?.daemon.running && !app.busy) {
+    e.preventDefault();
+    app.run(['restart']);
+  }
+}
+
+// Turns every spinner on the page.
+let frame = 0;
+setInterval(() => {
+  const spins = document.getElementsByClassName('spin');
+  if (!spins.length) return;
+  frame = (frame + 1) % SPIN.length;
+  for (const el of spins) el.textContent = SPIN[frame];
+}, 100);
 
 async function boot() {
   app.ctx = await api.context();
@@ -211,10 +296,11 @@ async function boot() {
   api.on('navigate', ({ view, selector }) => go(view, selector));
   api.on('command', onCommand);
   window.addEventListener('hashchange', () => go(location.hash.slice(1)));
-  await document.fonts.load('600 13px Overpass').catch(() => {});
+  document.addEventListener('keydown', onKey);
+  await Promise.all([document.fonts.load('500 12.5px "JetBrains Mono"'), document.fonts.load('700 13px "Martian Mono"')]).catch(() => {});
   await refreshStatus(true);
   if (!app.ctx.cli) renderSetup();
-  else go(location.hash.slice(1) || 'graph');
+  else go(location.hash.slice(1) || 'dependencies');
 }
 
 boot();

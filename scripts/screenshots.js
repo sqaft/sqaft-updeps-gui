@@ -12,7 +12,7 @@ import { locateCli, runCli } from '../src/main/cli.js';
 
 registerScheme();
 const [outDir = 'screenshots', ...requested] = process.argv.slice(process.argv.indexOf('scripts/screenshots.js') + 1);
-const views = requested.length ? requested : ['graph', 'activity', 'history', 'log', 'health'];
+const views = requested.length ? requested : ['dependencies', 'activity', 'history', 'log', 'health'];
 
 // Keep running between windows.
 app.on('window-all-closed', () => {});

@@ -4,6 +4,8 @@ import path from 'node:path';
 import { buildGraph, baseName } from '../src/shared/graph.js';
 import * as draft from '../src/shared/draft.js';
 import { summarize, ago, duration } from '../src/shared/status.js';
+import { cascade, islands, linkStates, lastPushes } from '../src/shared/tree.js';
+import { parseLog, parseDoctor } from '../src/shared/parse.js';
 
 // Resolves like the CLI: `~` to a fixed home, everything else made absolute.
 const resolvePath = (p) => (p.startsWith('~/') ? path.posix.join('/home/me', p.slice(2)) : path.posix.resolve('/', p));
@@ -90,6 +92,17 @@ test('field setters keep unknown fields and remove a key set to undefined', () =
   assert.equal(draft.setRepoField(raw, 0, 'branches', ['main']).repos[0].branches[0], 'main');
 });
 
+test('describeChanges names each change by repo and link', () => {
+  const after = draft.setLinkField(draft.connect(raw, { path: '~/w/web' }, { path: '~/w/docs' }, resolvePath).raw, 0, 0, 'push', true);
+  assert.deepEqual(draft.describeChanges(raw, draft.setDefaultsField(after, 'push', true)), [
+    'push of the defaults',
+    'push of @acme/lib → app',
+    'new link web → docs'
+  ]);
+  assert.deepEqual(draft.describeChanges(raw, draft.removeRepo(raw, '/home/me/w/web', resolvePath)), ['removed link @acme/lib → Web', 'removed repo web']);
+  assert.deepEqual(draft.describeChanges(raw, raw), []);
+});
+
 test('sameJson ignores key order', () => {
   assert.equal(draft.sameJson({ a: 1, b: [1, { c: 2 }] }, { b: [1, { c: 2 }], a: 1 }), true);
   assert.equal(draft.sameJson({ a: 1 }, { a: 1, b: undefined }), false);
@@ -135,4 +148,126 @@ test('ago and duration', () => {
   assert.equal(duration(850), '850ms');
   assert.equal(duration(12_400), '12.4s');
   assert.equal(duration(185_000), '3m 05s');
+});
+
+// lib → core → (api, worker); core → billing → api; ui → web; a lone repo.
+const tree = buildGraph(
+  {
+    repos: [
+      { path: '/w/lib', name: '@acme/lib', packages: [{ path: '/w/core' }] },
+      { path: '/w/core', name: '@acme/core', packages: [{ path: '/w/api' }, { path: '/w/worker' }, { path: '/w/billing' }] },
+      { path: '/w/billing', name: '@acme/billing', packages: [{ path: '/w/api' }] },
+      { path: '/w/ui', name: 'ui', packages: [{ path: '/w/web' }] },
+      { path: '/w/alone' }
+    ]
+  },
+  resolvePath
+);
+
+test('cascade: tree rows from the focused repo, a repo reached twice is not expanded again', () => {
+  const c = cascade(tree, '/w/lib');
+  assert.deepEqual(
+    c.rows.map((r) => [r.prefix + baseName(r.edge.target), r.repeat, r.depth]),
+    [
+      ['└─ core', false, 0],
+      ['   ├─ api', false, 1],
+      ['   ├─ worker', false, 1],
+      ['   └─ billing', false, 1],
+      ['      └─ api', true, 2]
+    ]
+  );
+  assert.equal(c.count, 4);
+  assert.equal(c.depth, 2);
+  assert.deepEqual(cascade(tree, '/w/api'), { rows: [], count: 0, depth: 0 });
+});
+
+test('islands: linked repos by steps from their sources, largest first, named by their scope', () => {
+  const list = islands(tree);
+  assert.deepEqual(
+    list.map((i) => [i.label, i.ranks.map((rank) => rank.map((n) => baseName(n.id)))]),
+    [
+      ['@acme', [['lib'], ['core'], ['billing', 'worker'], ['api']]],
+      ['ui', [['ui'], ['web']]],
+      ['alone', [['alone']]]
+    ]
+  );
+});
+
+test('linkStates: running, queued and open failures over the latest journal result', () => {
+  const states = linkStates(
+    tree,
+    status({
+      activeRun: { source: '@acme/core', targetPath: '/w/worker', startedAt: 5 },
+      queue: { pending: 1, jobs: [{ target: 'api', targetPath: '/w/api', sources: ['@acme/billing'] }] },
+      openFailures: [{ source: '@acme/lib', targetPath: '/w/core', lastSeen: '2026-01-01T00:00:00Z', count: 2 }]
+    }),
+    [
+      { source: '@acme/core', targetPath: '/w/api', status: 'committed', ts: '2026-01-02T00:00:00Z' },
+      { source: '@acme/core', targetPath: '/w/api', status: 'failed', ts: '2026-01-01T00:00:00Z' },
+      { source: '@acme/lib', targetPath: '/w/core', status: 'failed', ts: '2026-01-01T00:00:00Z' },
+      { source: 'ui', targetPath: '/w/web', status: 'unchanged', ts: '2026-01-01T00:00:00Z' }
+    ]
+  );
+  const kinds = Object.fromEntries([...states].map(([id, s]) => [id, s.kind]));
+  assert.deepEqual(kinds, { '1:1': 'running', '2:0': 'queued', '0:0': 'failed', '1:0': 'updated', '3:0': 'same' });
+  assert.equal(states.get('0:0').count, 2);
+
+  const pushes = lastPushes(status({ lastRuns: [{ sourceRepo: '@acme/core', timestamp: 9, sha: 'abc1234' }] }), [
+    { source: 'ui', ts: '1970-01-01T00:00:01Z', sourceSha: 'def5678aaaa' }
+  ]);
+  assert.deepEqual(Object.fromEntries(pushes), { '@acme/core': { ts: 9, sha: 'abc1234' }, ui: { ts: 1000, sha: 'def5678' } });
+});
+
+test('parseLog: time, level and repo; other lines continue the one before', () => {
+  const lines = parseLog(
+    [
+      '2026-10-29T14:31:37.102Z [INFO] [@acme/core] push detected (branch: main)',
+      '2026-10-29T14:31:38.000Z [ERROR] [@acme/api] npm update exited with code 1',
+      'npm ERR! code ERESOLVE',
+      '',
+      '2026-10-29T14:31:39.000Z [INFO] Daemon started (pid 1), 3 source repos.'
+    ].join('\n')
+  );
+  assert.deepEqual(lines, [
+    { ts: '2026-10-29T14:31:37.102Z', level: 'INFO', repo: '@acme/core', msg: 'push detected (branch: main)' },
+    { ts: '2026-10-29T14:31:38.000Z', level: 'ERROR', repo: '@acme/api', msg: 'npm update exited with code 1' },
+    { ts: null, level: 'ERROR', repo: '@acme/api', msg: 'npm ERR! code ERESOLVE' },
+    { ts: '2026-10-29T14:31:39.000Z', level: 'INFO', repo: null, msg: 'Daemon started (pid 1), 3 source repos.' }
+  ]);
+});
+
+test('parseDoctor: sections, repo sections, problems and the summary', () => {
+  const report = parseDoctor(
+    [
+      'Configuration',
+      '  ✓ valid (2 source repos)',
+      '',
+      '@acme/core',
+      '  ✓ git repo: ~/w/core',
+      '  ✗ no origin remote configured',
+      '  ! no reflog (no events yet, possibly): logs/refs/remotes/origin/main',
+      '  ✓ target api: ~/w/api',
+      '',
+      '@acme/gone',
+      '  ✗ folder not found',
+      '  ✓ target web: ~/w/web',
+      '',
+      'Service',
+      '  i the daemon resolves "node" from the PATH saved at "updeps start"',
+      '',
+      '2 problem(s) found.'
+    ].join('\n')
+  );
+  assert.deepEqual(
+    report.sections.map((s) => [s.title, s.isRepo, s.checks.map((c) => c.kind).join(' ')]),
+    [
+      ['Configuration', false, 'ok'],
+      ['@acme/core', true, 'ok bad warn ok'],
+      ['@acme/gone', true, 'bad ok'],
+      ['Service', false, 'info']
+    ]
+  );
+  assert.equal(report.summary, '2 problem(s) found.');
+  assert.equal(report.problems, 2);
+  assert.equal(report.warnings, 1);
 });

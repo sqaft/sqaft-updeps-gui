@@ -173,3 +173,45 @@ export function sameJson(a, b) {
   const kb = Object.keys(b);
   return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && sameJson(a[k], b[k]));
 }
+
+/**
+ * What changed between two raw configs, one line per change, for the save
+ * bar: `push of @acme/core → worker`, `new link @acme/core → api`,
+ * `removed repo @acme/ui`. Repos and links are matched by their path as written.
+ * @param {any} before
+ * @param {any} after
+ * @returns {string[]}
+ */
+export function describeChanges(before, after) {
+  const a = before && typeof before === 'object' ? before : {};
+  const b = after && typeof after === 'object' ? after : {};
+  const out = [];
+  const nameOf = (r) => (typeof r?.name === 'string' && r.name ? r.name : baseName(r?.path ?? ''));
+  const changedKeys = (x = {}, y = {}, skip = []) =>
+    [...new Set([...Object.keys(x), ...Object.keys(y)])].filter((k) => !skip.includes(k) && !sameJson(x[k], y[k]));
+  const byPath = (list) => new Map((Array.isArray(list) ? list : []).filter((e) => e && typeof e.path === 'string').map((e) => [e.path, e]));
+
+  for (const k of changedKeys(a, b, ['repos', 'defaults'])) out.push(k);
+  for (const k of changedKeys(a.defaults, b.defaults)) out.push(`${k} of the defaults`);
+
+  const reposA = byPath(a.repos);
+  const reposB = byPath(b.repos);
+  for (const [p, repo] of reposB) {
+    const old = reposA.get(p);
+    if (!old) {
+      out.push(`new repo ${nameOf(repo)}`);
+      continue;
+    }
+    for (const k of changedKeys(old, repo, ['path', 'packages'])) out.push(`${k} of ${nameOf(repo)}`);
+    const linksA = byPath(old.packages);
+    const linksB = byPath(repo.packages);
+    for (const [lp, link] of linksB) {
+      const was = linksA.get(lp);
+      if (!was) out.push(`new link ${nameOf(repo)} → ${nameOf(link)}`);
+      else for (const k of changedKeys(was, link, ['path'])) out.push(`${k} of ${nameOf(repo)} → ${nameOf(link)}`);
+    }
+    for (const [lp, link] of linksA) if (!linksB.has(lp)) out.push(`removed link ${nameOf(repo)} → ${nameOf(link)}`);
+  }
+  for (const [p, repo] of reposA) if (!reposB.has(p)) out.push(`removed repo ${nameOf(repo)}`);
+  return out;
+}

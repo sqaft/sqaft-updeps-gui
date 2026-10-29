@@ -13,8 +13,8 @@ It works with the updeps CLI installed on the machine (`sqaft-updeps-cli`, `@sqa
 - `src/main/`: the Electron main process. `main.js` (app lifecycle, single instance, tray actions), `cli.js` (finding the CLI and Node.js, running CLI commands), `ipc.js` (everything the page can call), `window.js` (the window and the `app://updeps/` scheme), `tray.js`, `watch.js` (file watching), `autostart.js` (start at login).
 - `src/mac-app.js`: on macOS, builds `updeps.app` (Electron.app cloned, renamed, re-signed ad hoc) so the Dock and Cmd+Tab show updeps; `bin/updeps-app.js` starts that instead of Electron.app.
 - `src/preload.cjs`: the `window.updeps` bridge.
-- `src/renderer/`: the page, plain ES modules without a framework; `views/graph.js` is the editor (Cytoscape.js with the dagre layout).
-- `src/shared/`: pure modules used by both sides and the tests (graph model, config edits, status summary).
+- `src/renderer/`: the page, plain ES modules without a framework; `app.js` is the shell (menu, statusline, command drawer, keys), `views/dependencies.js` the editor, `fields.js` the inherited-or-set form fields.
+- `src/shared/`: pure modules used by both sides and the tests: graph model (`graph.js`), the focus tree, islands and link states (`tree.js`), config edits and their description (`draft.js`), status summary (`status.js`), log and `doctor` parsers (`parse.js`).
 - `assets/`: tray and app icons drawn by `scripts/icons.js`.
 
 ## Commands
@@ -31,5 +31,5 @@ The package is versioned with semver because npm needs a new version for each pu
 ## Notes
 
 - All code, comments, docs, UI text and tests are in English.
-- Design: a signal-box panel. Tokens are CSS custom properties in `src/renderer/styles.css` (light and dark) and mirrored in `scripts/icons.js`; amber means a job runs, red an open failure. Fonts: Overpass, Overpass Mono (bundled from `@fontsource`).
-- UI text: sentence case, plain verbs, a button says what it does ("Save", "Retry", "Add dependent…").
+- Design: a terminal-style panel. Everything is monospace, sections are boxes with their title on the border, a statusline runs along the bottom, and the window works from the keyboard (each view lists its keys in the statusline). Colour means state only: amber a running or queued update, red an open failure, green an update that went through; a selection is inverted text. Tokens are CSS custom properties in `src/renderer/styles.css` (light and dark) and mirrored in `scripts/icons.js`. Fonts: JetBrains Mono, and Martian Mono for the brand and box titles (bundled from `@fontsource-variable`).
+- UI text: lowercase, plain verbs; a button says what it does and shows its key when it has one (`s save`, `r retry`, `+ add dependent…`). Native menus (the tray) keep sentence case.

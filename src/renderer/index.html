@@ -11,9 +11,11 @@
     <script type="module" src="/renderer/app.js"></script>
   </head>
   <body>
-    <header class="strip" id="strip"></header>
-    <nav class="rail" id="rail" aria-label="Views"></nav>
-    <main class="view" id="view"></main>
+    <div class="body">
+      <nav class="nav" id="nav" aria-label="Views"></nav>
+      <div class="view" id="view"></div>
+    </div>
     <section class="drawer" id="drawer" hidden aria-live="polite"></section>
+    <footer class="statusline" id="statusline"></footer>
   </body>
 </html>

@@ -91,18 +91,6 @@ export function registerIpc(ctx) {
     if (res.canceled || !res.filePaths[0]) return null;
     return needCli().api.displayPath(res.filePaths[0]);
   });
-  handle('dialog:confirm', async ({ message, detail, confirm }, event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    const res = await dialog.showMessageBox(win, {
-      type: 'question',
-      message: String(message),
-      detail: detail ? String(detail) : undefined,
-      buttons: [String(confirm || 'OK'), 'Cancel'],
-      defaultId: 0,
-      cancelId: 1
-    });
-    return res.response === 0;
-  });
 
   handle('status:read', () => needCli().api.readStatus());
   handle('service:inspect', () => needCli().api.inspectService());

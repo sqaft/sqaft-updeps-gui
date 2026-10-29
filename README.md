@@ -3,17 +3,25 @@
 The desktop app for [updeps](https://github.com/sqaft/sqaft-updeps-cli), on macOS,
 Linux and Windows:
 
-- **Dependencies**: the dependency graph as a track diagram. Add repos, link a
-  package to the repos that depend on it, and edit each dependent's commands,
-  triggers, branches and safety settings. Every edit is checked by updeps as you
-  type (errors, unknown fields, loops) and written to the config file when you
-  save; a running daemon picks it up right away.
+- **Dependencies**: what a push to a repo updates, as a tree of its links
+  (focus), and every repo in islands of linked repos (map), each with what the
+  daemon is doing or did last. Add repos, link a package to the repos that
+  depend on it, and edit each link's commands, triggers, branches and safety
+  settings; a value a link inherits shows where it comes from. Every edit is
+  checked by updeps as you type (errors, unknown fields, loops) and written to
+  the config file when you save; a running daemon picks it up right away.
 - **System tray**: the daemon's state at a glance. The icon shows whether it is
   stopped, running a job, or has open failures; on macOS the counts (`⚠2 ⧗1`) sit
   next to it. The menu lists the running job, the queue and open failures, and
   can retry failures, start, stop or restart the daemon, and clear run data.
-- **Activity**, **History**, **Log** and **Health check** views: what runs now,
-  every update with its commands and output, the raw log, and `updeps doctor`.
+- **Activity**, **History**, **Log** and **Health check** views: what runs now
+  with its latest log lines and the queue, every update grouped by the push that
+  started it with its commands and output, the log in columns with filters, and
+  `updeps doctor` as a checklist.
+
+The window works from the keyboard: `1`–`5` switch views, `R` restarts the
+daemon, and the statusline at the bottom lists the keys of the view you are in
+(`j`/`k` to move, `/` to search, `s` to save, `r` to retry…).
 
 The app works with the updeps CLI installed on the same computer, the one the
 daemon runs: it reads the config, state and journal through the CLI's API
@@ -113,8 +121,7 @@ npm run screenshots -- <dir> [view[:repo] ...]   # PNGs of each view, light and 
 ```
 
 There is no build step: the main process and the page are plain ES modules, and
-the page loads its files (and Cytoscape.js, the fonts) over the app's own
-`app://updeps/` scheme.
+the page loads its files and fonts over the app's own `app://updeps/` scheme.
 
 CI runs the tests on macOS, Linux and Windows. Publishing happens from CI: when
 the `version` in `package.json` is not on npm yet, the `publish` job in
