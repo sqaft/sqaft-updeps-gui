@@ -1,6 +1,6 @@
 {
   "name": "@sqaft/updeps-gui",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Desktop app for updeps: edit the dependency graph and see the daemon's status and failures in the system tray. macOS, Linux and Windows.",
   "keywords": [
     "updeps",
@@ -37,6 +37,7 @@
     "test": "node --test \"test/*.test.js\"",
     "icons": "node scripts/icons.js",
     "screenshots": "electron scripts/screenshots.js",
+    "screenshots:demo": "node scripts/demo.js",
     "prepublishOnly": "npm test"
   },
   "dependencies": {

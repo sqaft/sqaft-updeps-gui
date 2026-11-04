@@ -14,6 +14,9 @@ import { isTheme } from '../shared/theme.js';
  * @property {(theme: 'system'|'dark'|'light') => void} setTheme  applies and remembers the theme
  * @property {() => boolean} autostart
  * @property {(enabled: boolean) => void} setAutostart
+ * @property {() => boolean} startMinimized      a start at login opens in the tray without the window
+ * @property {(enabled: boolean) => void} setStartMinimized  remembers it
+ * @property {() => import('../shared/updates.js').Updates} updates  the app and CLI updates found by the last check
  */
 
 /**
@@ -52,6 +55,8 @@ export function registerIpc(ctx) {
       platform: process.platform,
       error: ctx.cliError,
       autostart: ctx.autostart(),
+      startMinimized: ctx.startMinimized(),
+      updates: ctx.updates(),
       cli: cli
         ? {
             root: cli.root,
@@ -109,6 +114,7 @@ export function registerIpc(ctx) {
     return ctx.theme();
   });
   handle('autostart:set', (enabled) => ctx.setAutostart(Boolean(enabled)));
+  handle('start-minimized:set', (enabled) => ctx.setStartMinimized(Boolean(enabled)));
   handle('shell:reveal', (what) => {
     const paths = needCli().api.paths;
     const file = { config: paths.configFile, log: paths.logFile, state: paths.stateFile }[what];

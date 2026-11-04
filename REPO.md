@@ -9,19 +9,21 @@ It works with the updeps CLI installed on the machine (`sqaft-updeps-cli`, `@sqa
 
 ## Layout
 
-- `bin/updeps-gui.js`: the `updeps-gui` command; starts Electron detached. `updeps gui` (the CLI's `src/commands/gui.js`) installs this package into its data directory and runs this file with `UPDEPS_CLI` set; keep the bin name and its options in step with it.
-- `src/main/`: the Electron main process. `main.js` (app lifecycle, single instance, tray actions), `cli.js` (finding the CLI and Node.js, running CLI commands), `ipc.js` (everything the page can call), `window.js` (the window and the `app://updeps/` scheme), `theme.js` (the remembered theme choice), `tray.js`, `watch.js` (file watching), `autostart.js` (start at login).
+- `bin/updeps-gui.js`: the `updeps-gui` command; starts Electron detached, or with `--quit` waits for a running app to quit. `updeps gui` (the CLI's `src/commands/gui.js`) installs this package into its data directory, runs `--quit` before replacing a running app, and runs this file with `UPDEPS_CLI` set; keep the bin name and its options in step with it.
+- `src/main/`: the Electron main process. `main.js` (app lifecycle, single instance, `--quit`, update checks, tray actions), `cli.js` (finding the CLI and Node.js, running CLI commands), `ipc.js` (everything the page can call), `window.js` (the window and the `app://updeps/` scheme), `theme.js` (the remembered theme choice), `settings.js` (the remembered start minimized choice), `tray.js`, `watch.js` (file watching), `autostart.js` (start at login).
 - `src/mac-app.js`: on macOS, builds `updeps.app` (Electron.app cloned, renamed, re-signed ad hoc) so the Dock and Cmd+Tab show updeps; `bin/updeps-gui.js` starts that instead of Electron.app.
 - `src/preload.cjs`: the `window.updeps` bridge.
-- `src/renderer/`: the page, plain ES modules without a framework; `app.js` is the shell (menu, statusline, command drawer, keys), `dom.js` the DOM helpers and the details panel (docked right or at the bottom, folds, tabs), `views/dependencies.js` the editor (the map), `fields.js` the inherited-or-set form fields.
-- `src/shared/`: pure modules used by both sides and the tests: graph model (`graph.js`), the details panel's tab logic (`tabs.js`), the theme choices (`theme.js`), shortcut symbols (`keys.js`), the map's layout, what a push updates and link states (`map.js`), config edits and their description (`draft.js`), status summary (`status.js`), log and `doctor` parsers (`parse.js`).
+- `src/renderer/`: the page, plain ES modules without a framework; `app.js` is the shell (menu, statusline, command drawer, keys), `dom.js` the DOM helpers and the details panel (docked right or at the bottom, folds, tabs), `views/dependencies.js` the editor (the map), `views/settings.js` the startup switches, `fields.js` the inherited-or-set form fields.
+- `src/shared/`: pure modules used by both sides and the tests: graph model (`graph.js`), the details panel's tab logic (`tabs.js`), the theme choices (`theme.js`), shortcut symbols (`keys.js`), the map's layout, what a push updates and link states (`map.js`), config edits and their description (`draft.js`), status summary (`status.js`), the app and CLI update notices (`updates.js`), whether a start opens hidden (`startup.js`), log and `doctor` parsers (`parse.js`).
 - `assets/`: tray and app icons drawn by `scripts/icons.js`.
+- `scripts/`: `icons.js`, `screenshots.js` (a PNG of each view from the installed CLI's data) and `demo.js` (mock data and the README screenshots); `docs/screenshots/`: the images `demo.js` writes.
 
 ## Commands
 
 - `npm test` — `node --test "test/*.test.js"` (no Electron needed; CI sets `ELECTRON_SKIP_BINARY_DOWNLOAD=1`)
 - `npm start` — runs the app from the working copy
-- `npm run screenshots -- <dir> [view[:repo][+folded][+bottom][+dark|+light] ...]` — saves a PNG of each view using the real config read-only (`:repo` selects that repo on the map, `+folded` folds both side panels, `+bottom` docks the details panel at the bottom, `+dark` or `+light` picks the theme, dark by default; the remembered theme is not written); use it to check UI changes
+- `npm run screenshots -- <dir> [view[:repo][+folded][+bottom][+updates][+autostart][+<width>x<height>][+dark|+light] ...]` — saves a PNG of each view using the real config read-only (`:repo` selects that repo on the map, `+folded` folds both side panels, `+bottom` docks the details panel at the bottom, `+updates` shows sample app and CLI updates, `+autostart` shows the settings with start at login on, `+1440x700` sets the content size, `+dark` or `+light` picks the theme, dark by default; the remembered theme is not written; `SCREENSHOTS_ISOLATE=<dir>` keeps Electron's data in that directory and refuses to run unless the CLI's files are inside it); use it to check UI changes
+- `npm run screenshots:demo` — `scripts/demo.js` builds a demo (eight git repos, a config, state, journal and log written from mock data, in a temp directory with its own `HOME` and XDG paths) and writes the README's images to `docs/screenshots/`. Run it after a visible UI change so the images match the app; nothing real is read or written. `docs/` is not in the package's `files`.
 - `npm run icons` — redraws `assets/`
 
 ## Releases

@@ -20,3 +20,13 @@ On the Turkish Q layout these keys are typed with Option (macOS) or AltGr (Windo
 
 ## 2026-11-04 — Dimming with `opacity` is far weaker for text on a pale background
 The same `opacity: 0.3` leaves dark text on a light page at 1.9:1 but light text on a dark page at 2.5:1, because the eye and WCAG weigh the two ends of the scale differently. The map's dimmed share is a token (`--dimmed`, 0.55 dark and 0.65 light) chosen so the dimmed repo names stay at 4.5:1 and the sub lines at 3:1 in both themes.
+
+## 2026-11-04 — `requestSingleInstanceLock()` can be polled after a first failure, and Chromium kills a hung holder
+In Electron 44 on macOS a second call succeeds as soon as the first instance has exited, so `--quit` can wait by polling it (checked with a frozen first instance resumed after 2.5 s: exit 0 after 2.5 s). A first instance that never answers is not waited for forever: Chromium's process singleton kills a hung holder after its own timeout (about 10 s per call), so `--quit` then exits 0 after roughly 20 s with the holder gone.
+
+## 2026-11-04 — The dependencies view overflows a 1280px window by about 100px with the details panel open
+The toolbar in the main area needs about 843px, and the nav (176px) plus the 360px panel leave 744px at the default 1280px window, so the panel runs past the window's right edge. The demo screenshots use a 1440px content width (`+1440x700` in `scripts/screenshots.js`).
+
+## 2026-11-04 — The CLI fixes its paths when it is imported, and the stale check compares file mtimes with `daemon.startedAt`
+`scripts/demo.js` therefore sets `HOME` and the XDG variables before `locateCli()` loads the API, and sets `daemon.startedAt` after the newest `.js` file in the CLI's `src/` and `bin/`; an older start shows the "new updeps code" chip.
+

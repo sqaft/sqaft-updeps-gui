@@ -9,6 +9,8 @@ import { parseLog, parseDoctor } from '../src/shared/parse.js';
 import { shownTab, stepTab, appearance } from '../src/shared/tabs.js';
 import { THEMES, isTheme, nextTheme } from '../src/shared/theme.js';
 import { symbolKey } from '../src/shared/keys.js';
+import { computeUpdates, isInstalled, NO_UPDATES } from '../src/shared/updates.js';
+import { startsHidden } from '../src/shared/startup.js';
 
 // Resolves like the CLI: `~` to a fixed home, everything else made absolute.
 const resolvePath = (p) => (p.startsWith('~/') ? path.posix.join('/home/me', p.slice(2)) : path.posix.resolve('/', p));
@@ -383,4 +385,49 @@ test('symbolKey: [ ] and \\ with Option (macOS) or AltGr (Windows, Linux), not w
   // Other keys are not symbols, whatever the modifiers.
   assert.equal(symbolKey(press('t'), 'darwin'), null);
   assert.equal(symbolKey(press('1', { altKey: true }), 'darwin'), null);
+});
+
+const newer = (latest, current) => {
+  const [a, b] = [latest, current].map((v) => v.split('.').map(Number));
+  return a.some((n, i) => n !== b[i] && n > b[i] && a.slice(0, i).every((m, j) => m === b[j]));
+};
+const checkedWith = (over = {}) => ({
+  cli: { current: '0.2.0', latest: '0.3.0', update: true, command: 'npm install -g @sqaft/updeps-cli' },
+  app: { latest: '0.0.2' },
+  ...over
+});
+
+test('computeUpdates announces a newer app only when it was installed from npm', () => {
+  const base = { checked: checkedWith(), appVersion: '0.0.1', isNewer: newer };
+  assert.deepEqual(computeUpdates({ ...base, installed: true }).app, { latest: '0.0.2', command: 'updeps gui' });
+  assert.equal(computeUpdates({ ...base, installed: false }).app, null);
+  assert.equal(computeUpdates({ ...base, installed: true, appVersion: '0.0.2' }).app, null);
+  assert.equal(computeUpdates({ ...base, installed: true, appVersion: '0.1.0' }).app, null);
+  assert.equal(computeUpdates({ ...base, installed: true, checked: checkedWith({ app: { latest: null } }) }).app, null);
+});
+
+test('computeUpdates announces the CLI only when the check says it can update', () => {
+  const base = { appVersion: '0.0.1', installed: true, isNewer: newer };
+  assert.deepEqual(computeUpdates({ ...base, checked: checkedWith() }).cli, { latest: '0.3.0', command: 'npm install -g @sqaft/updeps-cli' });
+  const cannot = checkedWith({ cli: { current: '0.2.0', latest: '0.3.0', update: false, command: 'x' } });
+  assert.equal(computeUpdates({ ...base, checked: cannot }).cli, null);
+});
+
+test('computeUpdates without a check result announces nothing', () => {
+  assert.deepEqual(computeUpdates({ checked: null, appVersion: '0.0.1', installed: true, isNewer: newer }), NO_UPDATES);
+});
+
+test('isInstalled: node_modules as a path segment', () => {
+  assert.equal(isInstalled('/home/me/.local/share/sqaft-updeps/gui/node_modules/@sqaft/updeps-gui'), true);
+  assert.equal(isInstalled('C:\\Users\\me\\gui\\node_modules\\@sqaft\\updeps-gui'), true);
+  assert.equal(isInstalled('/home/me/workspace/sqaft-updeps-gui'), false);
+  assert.equal(isInstalled('/home/me/my_node_modules_copy/app'), false);
+});
+
+test('startsHidden: --hidden always, --login follows the setting, a plain start shows the window', () => {
+  assert.equal(startsHidden(['--hidden'], false), true);
+  assert.equal(startsHidden(['--login'], true), true);
+  assert.equal(startsHidden(['--login'], false), false);
+  assert.equal(startsHidden([], true), false);
+  assert.equal(startsHidden(['/path/to/app'], true), false);
 });

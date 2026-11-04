@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('updeps', {
   readTheme: invoke('theme:read'),
   setTheme: invoke('theme:set'),
   setAutostart: invoke('autostart:set'),
+  setStartMinimized: invoke('start-minimized:set'),
   reveal: invoke('shell:reveal'),
   /**
    * @param {'changed'|'navigate'|'command'} event

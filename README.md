@@ -1,7 +1,14 @@
 # @sqaft/updeps-gui
 
 The desktop app for [updeps](https://github.com/sqaft/sqaft-updeps-cli), on macOS,
-Linux and Windows:
+Linux and Windows. It draws your repos and their links as a map, shows what the
+daemon is doing, and edits the config.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dependencies-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/dependencies-light.png">
+  <img alt="The dependencies view: eight repos on a map in three columns, with a push to one source selected so the repos it updates are lit, one update running, two queued and one failed, and the selected repo's settings in the panel on the right." src="docs/screenshots/dependencies-dark.png">
+</picture>
 
 - **Dependencies**: every repo and link on a map, in columns by steps from the
   sources, each repo with what the daemon is doing or did last. Select a repo
@@ -20,10 +27,16 @@ Linux and Windows:
   started it with its commands and output, the log in columns with filters, and
   `updeps doctor` as a checklist.
 
+  <img alt="The history view: updates grouped by the push that started them, with the open failure selected and its command and error output in the panel on the right." src="docs/screenshots/history-dark.png" width="720">
+
+- **Settings**: start at login and start minimized (see [Start at login](#start-at-login)).
+
+  <img alt="The settings view with start at login and start minimized turned on." src="docs/screenshots/settings-dark.png" width="480">
+
 The window has a soft dark theme and a light one; `t` (or the button above
 **hide menu**) cycles `system` (follows the operating system, the default),
 `dark` and `light`, and the choice is remembered. It works from the keyboard:
-`1`–`5` switch views, `[` and `]` fold the menu on the left and the details panel
+`1`–`6` switch views, `[` and `]` fold the menu on the left and the details panel
 (drag their inner edge to resize them, double-click it for the default size),
 `\` docks the details panel on the right or at the bottom, where each of its
 sections is a tab (`,` and `.` switch tabs), `R` restarts the daemon, and the statusline at the bottom lists the
@@ -51,14 +64,24 @@ updeps gui uninstall  # removes it
 `updeps gui install` puts the app in updeps' own data directory
 (`~/.local/share/sqaft-updeps/gui`, `%LOCALAPPDATA%\sqaft-updeps\gui` on
 Windows) with npm, so nothing is installed globally. It downloads Electron
-during the install (about 100 MB, 350 MB on disk). Requires Node.js 22+ and updeps 0.2.0 or newer (the first
-version whose `updeps gui` installs this package).
+during the install (about 100 MB, 350 MB on disk). Requires Node.js 22+. The app tells you when the installed updeps
+CLI is too old for it.
 
 The app can also be installed on its own with `npm install -g @sqaft/updeps-gui`
 and started with `updeps-gui`.
 
 The window opens and the app stays in the system tray when you close it. To
-start it at login, turn on **Start at login** in the tray menu.
+start it at login, turn on **start at login** in the settings view or **Start at
+login** in the tray menu.
+
+### Updates
+
+`updeps gui` offers to update the app when a newer version is published, and
+`updeps gui install` updates it. The app also checks (through the CLI, at most
+once a day) and shows what it finds: a chip in the statusline, an item at the top
+of the tray menu, and an **updates** box in the health view with the command to
+run, for the app (`updeps gui`) and for the CLI. A checkout run with `npm start`
+never announces an app update. The app does not install updates itself.
 
 On macOS the app is in the Dock and Cmd+Tab as **updeps** while its window is
 open. It runs from `updeps.app` in `~/Library/Application Support/updeps`, a copy
@@ -71,12 +94,16 @@ desktops have one; on GNOME install the "AppIndicator and KStatusNotifierItem
 Support" extension (Ubuntu ships it).
 
 ```
-updeps-gui [--hidden] [--foreground]
+updeps-gui [--hidden] [--login] [--foreground]
 updeps-gui --prepare
+updeps-gui --quit
 
   --hidden       start in the system tray without opening the window
+  --login        started by the login entry; follows the start minimized setting
   --foreground   stay attached to the terminal and print the app's output
   --prepare      download Electron and, on macOS, build updeps.app, then exit
+  --quit         ask a running app to quit and wait until it is gone; exits 0
+                 when none is running
 ```
 
 ### Finding the CLI
@@ -90,6 +117,14 @@ install, set `UPDEPS_CLI` to its package directory (for example a working copy
 of `sqaft-updeps-cli`). If no CLI is found, the window says how to install it.
 
 ### Start at login
+
+The settings view has two switches: **start at login** adds or removes the login
+entry (the tray's **Start at login** is the same switch), and **start minimized**
+decides whether a start at login opens in the tray without the window (the
+default) or with it. Starting the app any other way (`updeps gui`, the Dock, a
+launcher) always opens the window. The entry passes `--login`, and the app reads
+the choice, kept in `settings.json` in its user data directory, when it starts, so
+changing it does not rewrite the entry.
 
 | Platform | Entry |
 |---|---|
@@ -125,7 +160,8 @@ npm start                 # runs the app from the working copy (on macOS under E
 UPDEPS_GUI=$PWD updeps gui   # opens this working copy through the CLI
 npm test                  # node:test, no Electron needed
 npm run icons             # redraws assets/ (tray and app icons)
-npm run screenshots -- <dir> [view[:repo][+folded][+bottom][+dark|+light] ...]   # a PNG of each view
+npm run screenshots -- <dir> [view[:repo][+folded][+bottom][+updates][+autostart][+<width>x<height>][+dark|+light] ...]   # a PNG of each view
+npm run screenshots:demo  # redraws docs/screenshots/ from mock data (nothing real is read)
 ```
 
 There is no build step: the main process and the page are plain ES modules, and

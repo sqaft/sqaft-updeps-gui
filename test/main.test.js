@@ -10,13 +10,15 @@ import { findExecutable, cliRootFromCommand, readCliPackage, locateCli, mergePat
 import { renderAppPlist, renderDesktopEntry } from '../src/main/autostart.js';
 import { watchFiles } from '../src/main/watch.js';
 import { readTheme, writeTheme } from '../src/main/theme.js';
+import { readSettings, writeSettings } from '../src/main/settings.js';
+import { spawnSync } from 'node:child_process';
 
 const isWindows = process.platform === 'win32';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'updeps-gui-test-'));
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 /** A fake CLI package with an API module. */
-function fakeCli(dir, { name = '@sqaft/updeps-cli', apiVersion = 1 } = {}) {
+function fakeCli(dir, { name = '@sqaft/updeps-cli', apiVersion = 2 } = {}) {
   fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   fs.writeFileSync(
@@ -55,12 +57,12 @@ test('locateCli: UPDEPS_CLI, a missing CLI, and an API that is too old', async (
   const nodeDir = path.dirname(process.execPath);
   const cli = await locateCli({ UPDEPS_CLI: fakeCli(path.join(tmp, 'env')), PATH: nodeDir });
   assert.equal(cli.version, '9.9.9');
-  assert.equal(cli.api.API_VERSION, 1);
+  assert.equal(cli.api.API_VERSION, 2);
   assert.ok(cli.node);
 
   await assert.rejects(locateCli({ PATH: path.join(tmp, 'empty') }), /npm install -g @sqaft\/updeps-cli/);
   await assert.rejects(
-    locateCli({ UPDEPS_CLI: fakeCli(path.join(tmp, 'old'), { apiVersion: 0 }), PATH: nodeDir }),
+    locateCli({ UPDEPS_CLI: fakeCli(path.join(tmp, 'old'), { apiVersion: 1 }), PATH: nodeDir }),
     /too old/
   );
 });
@@ -81,16 +83,16 @@ test('findExecutable and mergePaths', () => {
   assert.equal(findExecutable('definitely-not-here', path.join(tmp, 'empty')), null);
 });
 
-test('login entries run node through the saved PATH with --hidden, escaped', () => {
+test('login entries run node through the saved PATH with --login, escaped', () => {
   const plist = renderAppPlist({ bin: '/a & b/bin/updeps-gui.js', pathEnv: '/x:/y' });
-  assert.match(plist, /<string>\/usr\/bin\/env<\/string>\s*<string>node<\/string>\s*<string>\/a &amp; b\/bin\/updeps-gui\.js<\/string>\s*<string>--hidden<\/string>/);
+  assert.match(plist, /<string>\/usr\/bin\/env<\/string>\s*<string>node<\/string>\s*<string>\/a &amp; b\/bin\/updeps-gui\.js<\/string>\s*<string>--login<\/string>/);
   assert.match(plist, /<key>PATH<\/key>\s*<string>\/x:\/y<\/string>/);
 
   const entry = renderDesktopEntry({ bin: '/home/me/app "x"/bin/updeps-gui.js', pathEnv: '/a:/b 100%' });
   const exec = /^Exec=(.*)$/m.exec(entry)[1];
   assert.equal(
     exec,
-    '"/usr/bin/env" "PATH=/a:/b 100%%" "node" "/home/me/app \\\\"x\\\\"/bin/updeps-gui.js" "--hidden"'
+    '"/usr/bin/env" "PATH=/a:/b 100%%" "node" "/home/me/app \\\\"x\\\\"/bin/updeps-gui.js" "--login"'
   );
 });
 
@@ -132,4 +134,30 @@ test('the theme choice is remembered in a file; a missing, broken or unknown one
   assert.equal(readTheme(file), 'system');
   fs.writeFileSync(file, 'not json');
   assert.equal(readTheme(file), 'system');
+});
+
+test('the start minimized setting defaults to on; a missing, broken or mistyped file gives the default', () => {
+  const file = path.join(tmp, 'settings-dir', 'settings.json');
+  assert.deepEqual(readSettings(file), { startMinimized: true });
+  writeSettings(file, { startMinimized: false });
+  assert.deepEqual(readSettings(file), { startMinimized: false });
+  writeSettings(file, { startMinimized: true });
+  assert.deepEqual(readSettings(file), { startMinimized: true });
+  fs.writeFileSync(file, '{"startMinimized":"no"}');
+  assert.deepEqual(readSettings(file), { startMinimized: true });
+  fs.writeFileSync(file, 'not json');
+  assert.deepEqual(readSettings(file), { startMinimized: true });
+});
+
+test('updeps-gui checks its options before starting anything', () => {
+  const bin = path.join(import.meta.dirname, '..', 'bin', 'updeps-gui.js');
+  const run = (...args) => spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8' });
+
+  const help = run('--help');
+  assert.equal(help.status, 0);
+  for (const option of ['--quit', '--login', '--hidden', '--prepare', '--foreground']) assert.match(help.stdout, new RegExp(option));
+
+  const unknown = run('--user-data-dir=/tmp/x');
+  assert.equal(unknown.status, 1);
+  assert.match(unknown.stderr, /Unknown option: --user-data-dir/);
 });

@@ -24,7 +24,7 @@ const xml = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
- * launchd agent that starts the app (in the tray) at login.
+ * launchd agent that starts the app at login (`--login`: whether it opens in the tray follows the start minimized setting).
  * @param {{ bin: string, pathEnv: string }} opts
  * @returns {string}
  */
@@ -40,7 +40,7 @@ export function renderAppPlist({ bin, pathEnv }) {
     <string>/usr/bin/env</string>
     <string>node</string>
     <string>${xml(bin)}</string>
-    <string>--hidden</string>
+    <string>--login</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -70,12 +70,12 @@ function execQuote(arg) {
 }
 
 /**
- * XDG autostart entry that starts the app (in the tray) at login.
+ * XDG autostart entry that starts the app at login (`--login`, as in the launchd agent).
  * @param {{ bin: string, pathEnv: string }} opts
  * @returns {string}
  */
 export function renderDesktopEntry({ bin, pathEnv }) {
-  const exec = ['/usr/bin/env', `PATH=${pathEnv}`, 'node', bin, '--hidden'].map(execQuote).join(' ');
+  const exec = ['/usr/bin/env', `PATH=${pathEnv}`, 'node', bin, '--login'].map(execQuote).join(' ');
   return `[Desktop Entry]
 Type=Application
 Name=updeps
@@ -94,7 +94,7 @@ X-GNOME-Autostart-enabled=true
 export function isEnabled(app) {
   if (process.platform === 'darwin') return fs.existsSync(PLIST);
   if (process.platform === 'win32') {
-    return app.getLoginItemSettings({ path: process.execPath, args: [APP_ROOT, '--hidden'] }).openAtLogin;
+    return app.getLoginItemSettings({ path: process.execPath, args: [APP_ROOT, '--login'] }).openAtLogin;
   }
   return fs.existsSync(DESKTOP_FILE);
 }
@@ -107,7 +107,7 @@ export function isEnabled(app) {
  */
 export function setEnabled(app, enabled, pathEnv) {
   if (process.platform === 'win32') {
-    app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: [APP_ROOT, '--hidden'] });
+    app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: [APP_ROOT, '--login'] });
     return;
   }
   const file = process.platform === 'darwin' ? PLIST : DESKTOP_FILE;

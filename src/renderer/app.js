@@ -7,6 +7,7 @@ import * as activityView from './views/activity.js';
 import * as historyView from './views/history.js';
 import * as logView from './views/log.js';
 import * as healthView from './views/health.js';
+import * as settingsView from './views/settings.js';
 
 const api = window.updeps;
 
@@ -16,7 +17,8 @@ const VIEWS = {
   activity: { label: 'activity', module: activityView },
   history: { label: 'history', module: historyView },
   log: { label: 'log', module: logView },
-  health: { label: 'health', module: healthView }
+  health: { label: 'health', module: healthView },
+  settings: { label: 'settings', module: settingsView }
 };
 const NAMES = Object.keys(VIEWS);
 
@@ -177,9 +179,26 @@ function renderStatusline() {
           h('button', { onclick: () => app.run(['restart']), disabled: app.busy, title: 'Restart the daemon to load it' }, 'R restart')
         )
       : null,
-    h('span', { class: 'hints' }, [current?.hints || '1–5 switch views', '[ ] panels', '\\ dock', 't theme', dockedBottom() && viewRoot.querySelector('.side-panel') ? ', . tabs' : null].filter(Boolean).join(' · ')),
+    updateChips(),
+    h('span', { class: 'hints' }, [current?.hints || '1–6 switch views', '[ ] panels', '\\ dock', 't theme', dockedBottom() && viewRoot.querySelector('.side-panel') ? ', . tabs' : null].filter(Boolean).join(' · ')),
     h('span', { class: 'version' }, app.ctx?.cli ? `updeps ${app.ctx.cli.version}` : 'updeps')
   );
+}
+
+/** One chip per available update, each leading to the health view. */
+function updateChips() {
+  const { app: appUpdate, cli: cliUpdate } = app.ctx?.updates || {};
+  const chip = (label, update, what) =>
+    h(
+      'span',
+      { class: 'stale' },
+      h(
+        'button',
+        { onclick: () => go('health'), title: `${what} ${update.latest} is available. Open the health view to see how to update it` },
+        `${label} ${update.latest}`
+      )
+    );
+  return [appUpdate ? chip('update', appUpdate, 'updeps') : null, cliUpdate ? chip('cli update', cliUpdate, 'updeps CLI') : null];
 }
 
 function renderSetup() {
@@ -233,6 +252,7 @@ async function onChanged(what) {
     await refreshStatus(true);
     if (!app.ctx.cli) renderSetup();
     else go(currentName || location.hash.slice(1) || 'dependencies');
+    current?.onChanged?.('context');
     return;
   }
   if (what === 'state' || what === 'tick') await refreshStatus();

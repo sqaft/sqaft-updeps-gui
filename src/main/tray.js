@@ -30,6 +30,7 @@ const clip = (s, n = 90) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
  * @property {() => void} clearData                            asks, then clears run data
  * @property {() => boolean} autostart
  * @property {(enabled: boolean) => void} setAutostart
+ * @property {() => import('../shared/updates.js').Updates} updates  the available updates, shown at the top of the menu
  * @property {() => void} quit
  */
 
@@ -49,7 +50,8 @@ export function createTray(actions) {
      */
     update(status, service) {
       const s = summarize(status, service);
-      const key = JSON.stringify(s) + actions.autostart();
+      const updates = actions.updates();
+      const key = JSON.stringify(s) + JSON.stringify(updates) + actions.autostart();
       if (key === lastKey) return;
       lastKey = key;
 
@@ -60,6 +62,12 @@ export function createTray(actions) {
       const available = s.state !== 'unavailable';
       /** @type {Electron.MenuItemConstructorOptions[]} */
       const items = [{ label: s.daemon, enabled: false }];
+      if (updates.app) {
+        items.push({ label: `Update available: updeps ${updates.app.latest}`, click: () => actions.open('health') });
+      }
+      if (updates.cli) {
+        items.push({ label: `Update available: updeps CLI ${updates.cli.latest}`, click: () => actions.open('health') });
+      }
       if (s.problem) items.push({ label: clip(s.problem), click: () => actions.run(['restart']) });
       if (s.active) items.push({ label: `Running: ${clip(s.active)}`, enabled: false });
       if (s.queued.length) {

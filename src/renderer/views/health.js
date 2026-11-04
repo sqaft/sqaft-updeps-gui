@@ -67,6 +67,35 @@ export function create(root, app) {
     );
   }
 
+  /** The app's and the CLI's updates, each with the command that installs it. */
+  function updatesBox() {
+    const { app: appUpdate, cli: cliUpdate } = app.ctx?.updates || {};
+    if (!appUpdate && !cliUpdate) return null;
+    const section = box(
+      'updates',
+      null,
+      appUpdate
+        ? h(
+            'div',
+            { class: 'stack', style: 'gap: 6px' },
+            h('span', { class: 'title' }, `updeps ${appUpdate.latest}`),
+            h('pre', { class: 'output' }, appUpdate.command),
+            h('p', { class: 'dim' }, 'the running app closes during the update.')
+          )
+        : null,
+      cliUpdate
+        ? h(
+            'div',
+            { class: 'stack', style: 'gap: 6px' },
+            h('span', { class: 'title' }, `updeps cli ${cliUpdate.latest}`),
+            h('pre', { class: 'output' }, cliUpdate.command)
+          )
+        : null
+    );
+    section.style.marginBottom = '26px';
+    return section;
+  }
+
   function render() {
     const report = parseDoctor(st.output);
     runButton.disabled = st.checking;
@@ -97,17 +126,19 @@ export function create(root, app) {
       );
     }
 
+    const updates = updatesBox();
     if (!st.output) {
-      mount(scroll, st.checking ? null : h('p', { class: 'empty' }, 'checks that every repo in the config exists and has an origin remote, that the commands are on PATH, and that the daemon can start with the Node.js it is set up with.'));
+      mount(scroll, updates, st.checking ? null : h('p', { class: 'empty' }, 'checks that every repo in the config exists and has an origin remote, that the commands are on PATH, and that the daemon can start with the Node.js it is set up with.'));
       return;
     }
     if (st.raw || !report.sections.length) {
-      mount(scroll, h('pre', { class: 'output', style: 'padding: 12px 14px; border: 1px solid var(--line-2)' }, st.output));
+      mount(scroll, updates, h('pre', { class: 'output', style: 'padding: 12px 14px; border: 1px solid var(--line-2)' }, st.output));
       return;
     }
     const top = scroll.scrollTop;
     mount(
       scroll,
+      updates,
       h(
         'div',
         { class: 'columns' },
@@ -128,6 +159,9 @@ export function create(root, app) {
   check();
   return {
     hints: 'r run again · o raw output',
+    onChanged(what) {
+      if (what === 'context') render();
+    },
     onKey(e) {
       if (typing() || e.metaKey || e.ctrlKey || e.altKey) return false;
       if (e.key === 'r') {

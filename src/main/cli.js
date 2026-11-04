@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 
 export const CLI_PACKAGE = '@sqaft/updeps-cli';
 /** The `@sqaft/updeps-cli/api` version this app is written against. */
-export const REQUIRED_API_VERSION = 1;
+export const REQUIRED_API_VERSION = 2;
 
 /**
  * First executable called `name` on `pathEnv` (with the PATHEXT extensions on Windows).

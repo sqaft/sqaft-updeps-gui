@@ -9,6 +9,13 @@ import { createTray } from './tray.js';
 import { watchFiles } from './watch.js';
 import * as autostart from './autostart.js';
 import { readTheme, writeTheme } from './theme.js';
+import { readSettings, writeSettings } from './settings.js';
+import { startsHidden } from '../shared/startup.js';
+import { NO_UPDATES, computeUpdates, isInstalled } from '../shared/updates.js';
+
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const QUIT_WAIT_MS = 10_000;
+const QUIT_POLL_MS = 200;
 
 registerScheme();
 app.setName('updeps');
@@ -17,13 +24,34 @@ app.setName('updeps');
 // parts (scrollbars, dialogs).
 const themeFile = path.join(app.getPath('userData'), 'theme.json');
 nativeTheme.themeSource = readTheme(themeFile);
+const settingsFile = path.join(app.getPath('userData'), 'settings.json');
 
 const isMac = process.platform === 'darwin';
 
-if (!app.requestSingleInstanceLock()) {
+if (process.argv.includes('--quit')) {
+  quitRunningInstance();
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   main();
+}
+
+/**
+ * `--quit`: asks the running instance to quit (it does so when this start
+ * reaches it as a `second-instance`) and exits 0 once it is gone, which is
+ * when this process gets the single-instance lock; 1 if it is still there
+ * after QUIT_WAIT_MS. With no instance running it exits 0 at once. Shows
+ * nothing: no window, no tray.
+ */
+function quitRunningInstance() {
+  app.dock?.hide();
+  const deadline = Date.now() + QUIT_WAIT_MS;
+  const poll = () => {
+    if (app.requestSingleInstanceLock()) app.exit(0);
+    else if (Date.now() >= deadline) app.exit(1);
+    else setTimeout(poll, QUIT_POLL_MS);
+  };
+  poll();
 }
 
 function main() {
@@ -48,7 +76,18 @@ function main() {
       autostart.setEnabled(app, enabled, ctx.env.PATH || '');
       refreshTray();
       broadcast('changed', 'context');
-    }
+    },
+    startMinimized: () => settings.startMinimized,
+    setStartMinimized(enabled) {
+      settings = { ...settings, startMinimized: enabled };
+      try {
+        writeSettings(settingsFile, settings);
+      } catch {
+        /* not remembered; this run still uses it */
+      }
+      broadcast('changed', 'context');
+    },
+    updates: () => updates
   };
 
   /** @type {BrowserWindow|null} */
@@ -58,6 +97,11 @@ function main() {
   let service = null;
   let serviceCheckedAt = 0;
   let commandSeq = 0;
+  let settings = readSettings(settingsFile);
+  /** @type {import('../shared/updates.js').Updates} */
+  let updates = NO_UPDATES;
+  // A checkout (`npm start`) never announces an update of the app.
+  const installed = isInstalled(app.getAppPath());
 
   function broadcast(channel, payload) {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
@@ -113,6 +157,27 @@ function main() {
       serviceCheckedAt = Date.now();
     }
     tray.update(status, service);
+  }
+
+  /**
+   * Asks the CLI whether the app or the CLI has an update (the CLI caches the
+   * answer for a day) and, when the answer changed, refreshes the tray and
+   * the windows. Never throws.
+   */
+  async function refreshUpdates() {
+    let next = NO_UPDATES;
+    if (ctx.cli) {
+      try {
+        const checked = await ctx.cli.api.checkUpdates();
+        next = computeUpdates({ checked, appVersion: app.getVersion(), installed, isNewer: ctx.cli.api.isNewer });
+      } catch {
+        return;
+      }
+    }
+    if (JSON.stringify(next) === JSON.stringify(updates)) return;
+    updates = next;
+    refreshTray();
+    broadcast('changed', 'context');
   }
 
   /**
@@ -173,6 +238,7 @@ function main() {
     }
     refreshTray(true);
     broadcast('changed', 'context');
+    refreshUpdates();
   }
 
   /**
@@ -227,17 +293,20 @@ function main() {
   }
 
   app.on('second-instance', (_event, argv) => {
-    if (!argv.includes('--hidden')) showWindow();
+    if (argv.includes('--quit')) app.quit();
+    else if (!startsHidden(argv, settings.startMinimized)) showWindow();
   });
   app.on('activate', () => showWindow());
   // Closing the window leaves the app running in the tray.
   app.on('window-all-closed', () => {});
   app.on('before-quit', () => stopWatching?.());
 
+  const hiddenStart = startsHidden(process.argv, settings.startMinimized);
+
   app.whenReady().then(async () => {
     if (isMac) {
       // A tray app: in the Dock only while the window is open (see showWindow).
-      if (process.argv.includes('--hidden')) app.dock?.hide();
+      if (hiddenStart) app.dock?.hide();
       // Started from Electron.app rather than updeps.app (npm start): at least the icon is updeps'.
       if (!process.execPath.includes('/updeps.app/')) {
         app.dock?.setIcon(fileURLToPath(new URL('../../assets/icon.png', import.meta.url)));
@@ -257,9 +326,11 @@ function main() {
       clearData,
       autostart: ctx.autostart,
       setAutostart: ctx.setAutostart,
+      updates: ctx.updates,
       quit: () => app.quit()
     });
     await relocate();
-    if (!process.argv.includes('--hidden')) showWindow();
+    if (!hiddenStart) showWindow();
+    setInterval(refreshUpdates, UPDATE_CHECK_INTERVAL_MS);
   });
 }
