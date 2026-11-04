@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, protocol, shell } from 'electron';
+import { BrowserWindow, nativeTheme, protocol, shell } from 'electron';
 
 const require = createRequire(import.meta.url);
 const SRC = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -11,8 +11,10 @@ const PRELOAD = fileURLToPath(new URL('../preload.cjs', import.meta.url));
 
 export const APP_ORIGIN = 'app://updeps';
 
-/** The page's background (`--bg` in styles.css), shown before it paints. */
-const BACKGROUND = '#0E1013';
+/** The page's background (`--bg` of each theme in styles.css), shown before it paints. */
+const BACKGROUND = { dark: '#20242a', light: '#f5f6f8' };
+
+const background = () => (nativeTheme.shouldUseDarkColors ? BACKGROUND.dark : BACKGROUND.light);
 
 /**
  * Directory of an installed package (works for packages that do not export
@@ -101,7 +103,7 @@ export function createWindow({ view } = {}) {
     title: 'updeps',
     show: false,
     icon: process.platform === 'darwin' ? undefined : path.join(ASSETS, 'icon.png'),
-    backgroundColor: BACKGROUND,
+    backgroundColor: background(),
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,
@@ -116,6 +118,10 @@ export function createWindow({ view } = {}) {
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(`${APP_ORIGIN}/`)) event.preventDefault();
   });
+  // The theme can change while the window is open (the choice, or the system's with `system`).
+  const paint = () => win.setBackgroundColor(background());
+  nativeTheme.on('updated', paint);
+  win.once('closed', () => nativeTheme.removeListener('updated', paint));
   win.once('ready-to-show', () => win.show());
   win.loadURL(`${APP_ORIGIN}/${view ? `#${view}` : ''}`);
   return win;

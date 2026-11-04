@@ -1,6 +1,7 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import { buildGraph } from '../shared/graph.js';
 import * as draft from '../shared/draft.js';
+import { isTheme } from '../shared/theme.js';
 
 /**
  * @typedef {object} Context  shared state of the main process
@@ -9,6 +10,8 @@ import * as draft from '../shared/draft.js';
  * @property {NodeJS.ProcessEnv} env     environment for CLI commands (login-shell PATH merged in)
  * @property {() => Promise<void>} relocate             looks for the CLI again
  * @property {(args: string[]) => Promise<{ code: number|null }>} runCommand  runs and broadcasts a CLI command
+ * @property {() => 'system'|'dark'|'light'} theme
+ * @property {(theme: 'system'|'dark'|'light') => void} setTheme  applies and remembers the theme
  * @property {() => boolean} autostart
  * @property {(enabled: boolean) => void} setAutostart
  */
@@ -99,6 +102,12 @@ export function registerIpc(ctx) {
   handle('log:read', (opts) => needCli().api.readLog(opts || {}));
 
   handle('cli:run', (args) => ctx.runCommand(args));
+  handle('theme:read', () => ctx.theme());
+  handle('theme:set', (theme) => {
+    if (!isTheme(theme)) throw new Error(`Unknown theme: ${theme}`);
+    ctx.setTheme(theme);
+    return ctx.theme();
+  });
   handle('autostart:set', (enabled) => ctx.setAutostart(Boolean(enabled)));
   handle('shell:reveal', (what) => {
     const paths = needCli().api.paths;

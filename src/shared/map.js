@@ -1,6 +1,6 @@
-// Views of the dependency graph for the Dependencies screen (pure): the tree
-// of repos a push to one repo updates, the islands of linked repos and every
-// repo in columns for the map, and what the daemon did last on each link.
+// Views of the dependency graph for the Dependencies screen (pure): the map's
+// layout, what a push to one repo updates, and what the daemon did last on
+// each link.
 
 /**
  * @typedef {import('./graph.js').GraphNode} GraphNode
@@ -9,61 +9,54 @@
  */
 
 /**
- * @typedef {object} CascadeRow
- * @property {GraphEdge} edge
- * @property {string} prefix   tree drawing before the name, e.g. `│  └─ `
- * @property {boolean} repeat  the target is already listed above; its own dependents are not repeated
- * @property {number} depth    0 for the focused repo's direct dependents
- */
-
-/**
- * The repos a push to `focusId` updates, as tree rows in config order. A repo
- * reached a second time is listed again (the link is real) but not expanded.
+ * What a push to `id` updates: every repo and link reachable from it.
  * @param {Graph} graph
- * @param {string} focusId
- * @param {number} [maxDepth]
- * @returns {{ rows: CascadeRow[], count: number, depth: number }}
- *   count: distinct repos updated; depth: steps from the focused repo
+ * @param {string} id
+ * @returns {{ repos: Set<string>, edges: Set<string>, count: number, depth: number }}
+ *   repos: `id` and the repos reachable from it; edges: every link leaving one of them;
+ *   count: the repos updated, `id` not counted; depth: steps along the longest chain
+ *   from `id` (a link back to a repo already on the chain is not followed)
  */
-export function cascade(graph, focusId, maxDepth = 8) {
+export function downstream(graph, id) {
   const out = new Map();
   for (const e of graph.edges) {
     if (!out.has(e.source)) out.set(e.source, []);
     out.get(e.source).push(e);
   }
-  const rows = [];
-  const seen = new Set([focusId]);
-  let depth = 0;
-  const walk = (id, prefix, d) => {
-    const list = out.get(id) || [];
-    list.forEach((edge, i) => {
-      const last = i === list.length - 1;
-      const repeat = seen.has(edge.target);
-      rows.push({ edge, prefix: prefix + (last ? '└─ ' : '├─ '), repeat, depth: d });
-      if (repeat) return;
-      seen.add(edge.target);
-      depth = Math.max(depth, d + 1);
-      if (d + 1 < maxDepth) walk(edge.target, prefix + (last ? '   ' : '│  '), d + 1);
-    });
+  const repos = new Set([id]);
+  const stack = [id];
+  while (stack.length) {
+    for (const e of out.get(stack.pop()) || []) {
+      if (!repos.has(e.target)) {
+        repos.add(e.target);
+        stack.push(e.target);
+      }
+    }
+  }
+  const edges = new Set(graph.edges.filter((e) => repos.has(e.source)).map((e) => e.id));
+
+  const longest = new Map();
+  const onChain = new Set();
+  const steps = (from) => {
+    if (longest.has(from)) return longest.get(from);
+    onChain.add(from);
+    let best = 0;
+    for (const e of out.get(from) || []) if (!onChain.has(e.target)) best = Math.max(best, 1 + steps(e.target));
+    onChain.delete(from);
+    longest.set(from, best);
+    return best;
   };
-  walk(focusId, '', 0);
-  return { rows, count: seen.size - 1, depth };
+  return { repos, edges, count: repos.size - 1, depth: steps(id) };
 }
 
 /**
- * @typedef {object} Island
- * @property {string} label      the scope most of its repos share (`@acme`), else its first source's name
- * @property {GraphNode[][]} ranks  repos by steps from the sources: sources without a source of their own first
- */
-
-/**
- * Splits the graph into groups of linked repos, largest first.
+ * Splits the graph into groups of linked repos, largest first, each with its
+ * repos by steps from the sources.
  * @param {Graph} graph
- * @returns {Island[]}
+ * @returns {string[][][]}  per group, the ids of each step: sources without a source of their own first
  */
-export function islands(graph) {
+function components(graph) {
   const order = new Map(graph.nodes.map((n, i) => [n.id, i]));
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const near = new Map(graph.nodes.map((n) => [n.id, []]));
   for (const e of graph.edges) {
     near.get(e.source)?.push(e.target);
@@ -106,18 +99,9 @@ export function islands(graph) {
         if (!changed) break;
       }
       const top = Math.max(...ids.map((id) => rank.get(id)));
-      const ranks = Array.from({ length: top + 1 }, (_, r) => ids.filter((id) => rank.get(id) === r).map((id) => byId.get(id)));
-
-      const scopes = new Map();
-      for (const id of ids) {
-        const scope = byId.get(id).name.match(/^@[^/]+/)?.[0];
-        if (scope) scopes.set(scope, (scopes.get(scope) || 0) + 1);
-      }
-      const [scope, count] = [...scopes].sort((a, b) => b[1] - a[1])[0] || [null, 0];
-      return { label: scope && count * 2 >= ids.length ? scope : ranks[0][0].name, ranks, size: ids.length };
+      return Array.from({ length: top + 1 }, (_, r) => ids.filter((id) => rank.get(id) === r));
     })
-    .sort((a, b) => b.size - a.size)
-    .map(({ label, ranks }) => ({ label, ranks }));
+    .sort((a, b) => b.flat().length - a.flat().length);
 }
 
 /**
@@ -148,16 +132,16 @@ function stack(ids, want, pitch, center) {
 }
 
 /**
- * Places the repos of one island, a column per step, each near the repos it
+ * Places the repos of one group of linked repos, a column per step, each near the repos it
  * is linked to in the columns before and after it: sweeps forward (towards
  * the repos that reach it), back (towards the repos it reaches) and forward
  * again.
  * @param {string[][]} ranks  ids by column
- * @param {GraphEdge[]} edges  the island's links
+ * @param {GraphEdge[]} edges  the group's links
  * @param {number} pitch
  * @returns {Map<string, number>} vertical centre of each repo
  */
-function placeIsland(ranks, edges, pitch) {
+function placeGroup(ranks, edges, pitch) {
   const col = new Map();
   const center = new Map();
   ranks.forEach((ids, r) =>
@@ -186,79 +170,66 @@ function placeIsland(ranks, edges, pitch) {
 }
 
 /**
- * @typedef {object} MapBand
- * @property {string|null} label  the island's label; null for the repos without links
- * @property {number} size         its repos
- * @property {number} top          where its title goes; its repos start `head` below
- */
-
-/**
  * @typedef {object} MapLayout
- * @property {string[][]} columns          every repo by column, band by band, top to bottom
- * @property {Map<string, number>} column  steps from the sources of its island
+ * @property {string[][]} columns          every repo by column, top to bottom
+ * @property {string[]} order              the walking order: group by group, column by column, then the repos without links
+ * @property {Map<string, number>} column  steps from the sources of its group
  * @property {Map<string, number>} y       vertical centre of each repo, 0 at the top
- * @property {Map<string, number>} band    index in `bands` of each repo
- * @property {MapBand[]} bands             top to bottom
+ * @property {{ ids: string[], top: number }|null} loose  the repos without links and where their heading goes; their boxes start `title` below
  * @property {number} height
  */
 
 /**
- * Every repo in columns, for the map. Each island of linked repos is a band,
- * largest first, with one column per step from its sources (the steps of
- * `islands`) and each repo placed near the repos it is linked to. The repos
- * without links share the last band, filling its columns row by row. Columns
- * line up across bands.
+ * Every repo in columns, for the map. Each group of linked repos has one
+ * column per step from its sources and each repo sits near the repos it is
+ * linked to; groups follow one another, largest first, a box gap apart, so
+ * linked repos stay adjacent. The repos without links form one block at the
+ * bottom, filling the columns row by row.
  * @param {Graph} graph
- * @param {{ row: number, gap: number, head: number, bandGap: number }} size
- *   a repo's box height, the gap between boxes, the room for a band's title above its repos, and the gap between bands
+ * @param {{ row: number, gap: number, title: number }} size
+ *   a repo's box height, the gap between boxes, and the room for the heading of the repos without links
  * @returns {MapLayout}
  */
-export function mapLayout(graph, { row, gap, head, bandGap }) {
+export function mapLayout(graph, { row, gap, title }) {
   const pitch = row + gap;
   const linkedIds = new Set(graph.edges.flatMap((e) => [e.source, e.target]));
-  const all = islands(graph);
-  const linked = all.filter((i) => i.ranks.some((r) => r.some((n) => linkedIds.has(n.id))));
-  const loose = all.filter((i) => !linked.includes(i)).flatMap((i) => i.ranks.flat().map((n) => n.id));
-  const width = Math.max(1, ...linked.map((i) => i.ranks.length));
+  const groups = components(graph);
+  const linked = groups.filter((ranks) => ranks.flat().some((id) => linkedIds.has(id)));
+  const loose = groups.filter((ranks) => !linked.includes(ranks)).flatMap((ranks) => ranks.flat());
+  const width = Math.max(1, ...linked.map((ranks) => ranks.length));
 
   const columns = Array.from({ length: width }, () => []);
   const column = new Map();
   const y = new Map();
-  const band = new Map();
-  const bands = [];
+  const order = [];
   let top = 0;
 
-  for (const island of linked) {
-    const ranks = island.ranks.map((r) => r.map((n) => n.id));
+  for (const ranks of linked) {
     const inside = new Set(ranks.flat());
-    const center = placeIsland(ranks, graph.edges.filter((e) => inside.has(e.source) && inside.has(e.target)), pitch);
+    const center = placeGroup(ranks, graph.edges.filter((e) => inside.has(e.source) && inside.has(e.target)), pitch);
     const first = Math.min(...center.values());
     const last = Math.max(...center.values());
     ranks.forEach((ids, r) => {
       const sorted = [...ids].sort((a, b) => center.get(a) - center.get(b));
       for (const id of sorted) {
         column.set(id, r);
-        y.set(id, Math.round(top + head + row / 2 + center.get(id) - first));
-        band.set(id, bands.length);
+        y.set(id, Math.round(top + row / 2 + center.get(id) - first));
       }
       columns[r].push(...sorted);
+      order.push(...sorted);
     });
-    bands.push({ label: island.label, size: inside.size, top });
-    top += Math.round(head + last - first + row + bandGap);
+    top += Math.round(last - first + row + gap);
   }
 
-  if (loose.length) {
-    loose.forEach((id, i) => {
-      column.set(id, i % width);
-      y.set(id, Math.round(top + head + row / 2 + Math.floor(i / width) * pitch));
-      band.set(id, bands.length);
-      columns[i % width].push(id);
-    });
-    bands.push({ label: null, size: loose.length, top });
-    top += head + Math.ceil(loose.length / width) * pitch - gap + bandGap;
-  }
+  if (!loose.length) return { columns, order, column, y, loose: null, height: Math.max(0, top - gap) };
 
-  return { columns, column, y, band, bands, height: Math.max(0, Math.round(top - bandGap)) };
+  loose.forEach((id, i) => {
+    column.set(id, i % width);
+    y.set(id, Math.round(top + title + row / 2 + Math.floor(i / width) * pitch));
+    columns[i % width].push(id);
+  });
+  order.push(...loose);
+  return { columns, order, column, y, loose: { ids: loose, top }, height: top + title + Math.ceil(loose.length / width) * pitch - gap };
 }
 
 /**

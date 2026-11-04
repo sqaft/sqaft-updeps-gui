@@ -1,9 +1,12 @@
 // Saves a screenshot of each view, for checking the UI:
-//   npm run screenshots -- <out-dir> [view[:repo-name] ...]
-// A view can be given as `dependencies@tree` or `dependencies@map` to pick
-// how Dependencies shows, and a `+folded` suffix folds both side panels.
+//   npm run screenshots -- <out-dir> [view[:repo-name][+folded][+bottom][+dark|+light] ...]
+// `dependencies:repo-name` selects that repo on the map, a `+folded` suffix
+// folds both side panels, a `+bottom` suffix docks the details panel at the
+// bottom (the others dock it on the right), and `+dark` or `+light` picks the
+// theme (dark by default). The suffixes combine in any order.
 // It reads the real config and state through the installed CLI, but never
-// writes: CLI commands other than `doctor` are not run.
+// writes: CLI commands other than `doctor` are not run, and the theme is not
+// remembered.
 import fs from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -20,7 +23,6 @@ const views = requested.length ? requested : ['dependencies', 'activity', 'histo
 app.on('window-all-closed', () => {});
 
 app.whenReady().then(async () => {
-  nativeTheme.themeSource = 'dark';
   handleProtocol();
   const cli = await locateCli(process.env);
   registerIpc({
@@ -34,6 +36,9 @@ app.whenReady().then(async () => {
       const { code } = await runCli(cli, args, { env: process.env, onOutput: (t) => (output += t) });
       return { code, output };
     },
+    // The theme is set per shot below; the remembered choice is never written.
+    theme: () => nativeTheme.themeSource,
+    setTheme: (theme) => (nativeTheme.themeSource = theme),
     autostart: () => false,
     setAutostart: () => {}
   });
@@ -44,14 +49,18 @@ app.whenReady().then(async () => {
       win.webContents.once('did-fail-load', (_e, code, desc) => resolve(console.error(`load failed: ${code} ${desc}`)));
     });
   for (const spec of views) {
-    const [, view, mode, selector, folded] = spec.match(/^([^@:+]+)(?:@(\w+))?(?::([^+]+))?(\+folded)?$/) || [null, spec];
+    const [head, ...flags] = spec.split('+');
+    const [view, selector] = head.split(':');
+    const folded = flags.includes('folded');
+    const bottom = flags.includes('bottom');
+    nativeTheme.themeSource = flags.includes('light') ? 'light' : 'dark';
     const win = createWindow({ view });
     win.webContents.on('console-message', (event) => {
       if (event.level === 'error' || event.level === 'warning') console.error(`[${spec}] ${event.message}`);
     });
     await loaded(win);
     // The page keeps these in localStorage; set them for this shot and load it again.
-    const prefs = { 'layout.nav': folded ? 'folded' : 'open', 'layout.side': folded ? 'folded' : 'open', ...(mode ? { 'dependencies.mode': mode } : {}) };
+    const prefs = { 'layout.nav': folded ? 'folded' : 'open', 'layout.side': folded ? 'folded' : 'open', 'layout.dock': bottom ? 'bottom' : 'right' };
     await win.webContents.executeJavaScript(
       `for (const [k, v] of Object.entries(${JSON.stringify(prefs)})) localStorage.setItem(k, v); location.reload();`
     );

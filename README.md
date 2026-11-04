@@ -3,10 +3,10 @@
 The desktop app for [updeps](https://github.com/sqaft/sqaft-updeps-cli), on macOS,
 Linux and Windows:
 
-- **Dependencies**: every repo and link on a map, each island of linked repos
-  in columns by steps from its sources (map), and what a push to one repo
-  updates as a tree of its links (tree), each repo with what the daemon is
-  doing or did last. Click a repo or a link on the map to edit it. Add repos, link a package to the repos that
+- **Dependencies**: every repo and link on a map, in columns by steps from the
+  sources, each repo with what the daemon is doing or did last. Select a repo
+  to light what a push to it updates; the rest dims. Zoom with cmd/ctrl and the
+  wheel, pinch or `=`, `-` and `0` (fit), and drag the background to pan. Click a repo or a link on the map to edit it. Add repos, link a package to the repos that
   depend on it, and edit each link's commands, triggers, branches and safety
   settings; a value a link inherits shows where it comes from. Every edit is
   checked by updeps as you type (errors, unknown fields, loops) and written to
@@ -20,12 +20,15 @@ Linux and Windows:
   started it with its commands and output, the log in columns with filters, and
   `updeps doctor` as a checklist.
 
-The window has a single, dark theme. It works from the keyboard: `1`–`5`
-switch views, `[` and `]` fold the menu on the left and the details panel on
-the right (drag their inner edge to resize them, double-click it for the
-default width), `R` restarts the daemon, and the statusline at the bottom lists the
-keys of the view you are in (`j`/`k` to move, `/` to search, `m` to switch
-between map and tree, `s` to save, `r` to retry…).
+The window has a soft dark theme and a light one; `t` (or the button above
+**hide menu**) cycles `system` (follows the operating system, the default),
+`dark` and `light`, and the choice is remembered. It works from the keyboard:
+`1`–`5` switch views, `[` and `]` fold the menu on the left and the details panel
+(drag their inner edge to resize them, double-click it for the default size),
+`\` docks the details panel on the right or at the bottom, where each of its
+sections is a tab (`,` and `.` switch tabs), `R` restarts the daemon, and the statusline at the bottom lists the
+keys of the view you are in (`j`/`k` to move, `/` to search, `=`, `-` and `0` to
+zoom the map, `s` to save, `r` to retry…).
 
 The app works with the updeps CLI installed on the same computer, the one the
 daemon runs: it reads the config, state and journal through the CLI's API
@@ -104,8 +107,9 @@ directly, so no console window opens at login.
 ## Security
 
 The window's page is sandboxed with context isolation and no Node.js access. It
-reaches the main process only through a fixed set of calls (`src/preload.cjs`),
-and the only CLI commands the app runs are `start`, `stop`, `restart`, `retry`,
+reaches the main process only through a fixed set of calls (`src/preload.cjs`;
+one of them sets the theme, and the main process accepts only `system`, `dark`
+or `light`), and the only CLI commands the app runs are `start`, `stop`, `restart`, `retry`,
 `run`, `reset`, `doctor` and `graph`. Credentials in a repo's `origin` URL are
 masked before they are shown.
 
@@ -121,7 +125,7 @@ npm start                 # runs the app from the working copy (on macOS under E
 UPDEPS_GUI=$PWD updeps gui   # opens this working copy through the CLI
 npm test                  # node:test, no Electron needed
 npm run icons             # redraws assets/ (tray and app icons)
-npm run screenshots -- <dir> [view[@map|@tree][:repo][+folded] ...]   # a PNG of each view
+npm run screenshots -- <dir> [view[:repo][+folded][+bottom][+dark|+light] ...]   # a PNG of each view
 ```
 
 There is no build step: the main process and the page are plain ES modules, and

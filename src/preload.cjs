@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('updeps', {
   readRun: invoke('run:read'),
   readLog: invoke('log:read'),
   run: invoke('cli:run'),
+  readTheme: invoke('theme:read'),
+  setTheme: invoke('theme:set'),
   setAutostart: invoke('autostart:set'),
   reveal: invoke('shell:reveal'),
   /**

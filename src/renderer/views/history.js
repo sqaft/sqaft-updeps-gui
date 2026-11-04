@@ -1,6 +1,8 @@
 // Every update from the journal, grouped by the push that started it, and one
-// push in full: each update's commands, commit, files and output.
-import { h, mount, box, keyButton, glyph, spinner, LOOK, shortTime, typing, plural, sidePanel } from '../dom.js';
+// push in full: each update's commands, commit, files and output. The push
+// panel has a tab for the push and one for each of its updates when it is
+// docked at the bottom.
+import { h, mount, box, tab, keyButton, glyph, spinner, LOOK, shortTime, typing, plural, sidePanel, dockedBottom } from '../dom.js';
 import { duration } from '/shared/status.js';
 
 const SPANS = [
@@ -23,7 +25,8 @@ export function create(root, app) {
     records: [],
     selected: null, // { group, target|null }
     open: new Set(), // `${group}|${target}` expanded in the detail
-    run: null
+    run: null,
+    tabRequest: null // the panel tab to show once the selected push has loaded
   };
 
   const filters = h('div', { class: 'row', style: 'gap: 10px 18px' });
@@ -46,7 +49,7 @@ export function create(root, app) {
   const count = h('span', { class: 'count' });
   const list = h('div', { class: 'groups', 'aria-label': 'Updates' });
   const scroll = h('div', { class: 'scroll' }, list);
-  const { el: panel, body: detail } = sidePanel({ label: 'Push', wide: true });
+  const { el: panel, show: showPanel, empty: emptyPanel, step: stepTabs } = sidePanel({ label: 'Push', wide: true });
 
   root.append(
     h(
@@ -98,6 +101,7 @@ export function create(root, app) {
       // The newest update that is still an open failure, else the newest one.
       const first = st.records.find((r) => r.status === 'failed' && isOpenFailure(r.source, r.target)) || st.records[0];
       st.selected = { group: first.group, target: first.target };
+      st.tabRequest = tabOf(first.target);
       loadRun();
     }
     renderList();
@@ -171,6 +175,9 @@ export function create(root, app) {
     scroll.scrollTop = top;
   }
 
+  /** The panel tab of an update, or of the push itself. */
+  const tabOf = (target) => (target ? `update:${target}` : 'push');
+
   /**
    * @param {string} group
    * @param {string|null} target
@@ -178,6 +185,7 @@ export function create(root, app) {
   function choose(group, target) {
     const changed = st.selected?.group !== group;
     st.selected = { group, target };
+    st.tabRequest = tabOf(target);
     if (target) st.open.add(`${group}|${target}`);
     renderList();
     if (changed) loadRun();
@@ -198,10 +206,8 @@ export function create(root, app) {
     return (app.status?.openFailures || []).some((f) => f.target === target && f.source === source);
   }
 
-  function targetBox(run, t, source) {
-    const key = `${run.group}|${t.target}`;
-    const selected = st.selected?.target === t.target;
-    const open = selected || st.open.has(key);
+  /** What one update shows: its commands, outcome, commit and buttons. */
+  function targetBody(t, source) {
     const look = LOOK[t.status] || LOOK.none;
     const body = [];
     if (t.commands?.length) body.push(h('pre', { class: 'output' }, t.commands.map((c) => `$ ${c}`).join('\n')));
@@ -224,6 +230,15 @@ export function create(root, app) {
     if (t.status === 'running') buttons.push(keyButton('2', 'activity', () => app.go('activity')));
     buttons.push(keyButton(null, 'open the link', () => app.go('dependencies', source)));
     body.push(h('div', { class: 'row' }, buttons));
+    return body;
+  }
+
+  function targetBox(run, t, source) {
+    const key = `${run.group}|${t.target}`;
+    const selected = st.selected?.target === t.target;
+    const open = selected || st.open.has(key);
+    const look = LOOK[t.status] || LOOK.none;
+    const body = targetBody(t, source);
 
     return h(
       'div',
@@ -249,14 +264,22 @@ export function create(root, app) {
     );
   }
 
+  /** An update as a tab of the panel docked at the bottom: always open. */
+  function targetTab(t, source) {
+    const look = LOOK[t.status] || LOOK.none;
+    const tone = t.status === 'failed' ? 'failed' : t.status === 'running' ? 'running' : null;
+    const status = h('span', { class: `status ${look.cls}` }, glyph(t.status), ` ${look.word}`, t.durationMs ? ` · ${duration(t.durationMs)}` : '');
+    return tab(box(t.target, null, status, targetBody(t, source)), tabOf(t.target), { label: t.target, tone });
+  }
+
   function renderDetail() {
     const run = st.run;
     if (!st.selected) {
-      mount(detail, h('p', { class: 'empty' }, 'choose an update to see its commands and output.'));
+      emptyPanel(h('p', { class: 'empty' }, 'choose an update to see its commands and output.'));
       return;
     }
     if (!run) {
-      mount(detail, h('p', { class: 'empty' }, 'no run found for this update.'));
+      emptyPanel(h('p', { class: 'empty' }, 'no run found for this update.'));
       return;
     }
     const { start, done } = run;
@@ -266,21 +289,29 @@ export function create(root, app) {
     if (active?.group === run.group && !targets.some((t) => t.target === active.target)) {
       targets.push({ target: active.target, status: 'running', commands: [] });
     }
-    mount(
-      detail,
-      box(
-        `push to ${source}`,
-        done?.failed ? 'failing' : null,
-        h(
-          'span',
-          { class: 'muted' },
-          start ? `${start.trigger}${start.sha ? ` ${start.sha.slice(0, 7)}` : ''} · ${new Date(start.ts).toLocaleString()}${start.dryRun ? ' · dry run' : ''}` : run.group
+    // The requested tab is for the selected push; a tick before it has loaded leaves the request alone.
+    const requested = run.group === st.selected.group ? st.tabRequest : null;
+    if (requested) st.tabRequest = null;
+    showPanel(
+      [
+        tab(
+          box(
+            `push to ${source}`,
+            done?.failed ? 'failing' : null,
+            h(
+              'span',
+              { class: 'muted' },
+              start ? `${start.trigger}${start.sha ? ` ${start.sha.slice(0, 7)}` : ''} · ${new Date(start.ts).toLocaleString()}${start.dryRun ? ' · dry run' : ''}` : run.group
+            ),
+            done
+              ? h('span', { class: done.failed ? 'error' : 'muted' }, `${done.committed} committed, ${done.unchanged} up to date, ${done.failed} failed, ${done.skipped} skipped`)
+              : h('span', { class: 's-running' }, active?.group === run.group ? [spinner(), ' still running'] : 'still running, or the run was interrupted')
+          ),
+          'push'
         ),
-        done
-          ? h('span', { class: done.failed ? 'error' : 'muted' }, `${done.committed} committed, ${done.unchanged} up to date, ${done.failed} failed, ${done.skipped} skipped`)
-          : h('span', { class: 's-running' }, active?.group === run.group ? [spinner(), ' still running'] : 'still running, or the run was interrupted')
-      ),
-      targets.map((t) => targetBox(run, t, source))
+        targets.map((t) => (dockedBottom() ? targetTab(t, source) : targetBox(run, t, source)))
+      ],
+      { key: run.group, focusTab: requested }
     );
   }
 
@@ -315,6 +346,9 @@ export function create(root, app) {
         case 'f':
           setFailed(!st.failed);
           return true;
+        case ',':
+        case '.':
+          return stepTabs(e.key === '.' ? 1 : -1);
         case 'r': {
           const source = st.run?.start?.source;
           const target = st.selected?.target;
@@ -333,6 +367,9 @@ export function create(root, app) {
       } else if (what === 'state' || what === 'busy') {
         renderList();
         renderDetail();
+      } else if (what === 'layout') {
+        st.tabRequest = tabOf(st.selected?.target);
+        renderDetail();
       }
     },
     async navigate(selector) {
@@ -345,6 +382,7 @@ export function create(root, app) {
       queryInput.value = '';
       renderFilters();
       st.selected = { group: run.group, target: target?.target ?? null };
+      st.tabRequest = tabOf(st.selected.target);
       if (target) st.open.add(`${run.group}|${target.target}`);
       st.run = run;
       await loadList();

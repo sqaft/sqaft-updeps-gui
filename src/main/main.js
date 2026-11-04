@@ -8,11 +8,15 @@ import { registerIpc } from './ipc.js';
 import { createTray } from './tray.js';
 import { watchFiles } from './watch.js';
 import * as autostart from './autostart.js';
+import { readTheme, writeTheme } from './theme.js';
 
 registerScheme();
 app.setName('updeps');
-// The page has a single, dark theme; the window's own parts (scrollbars, dialogs) match it.
-nativeTheme.themeSource = 'dark';
+// The theme choice (system, dark or light) is remembered in the user data directory and applies
+// before the first window opens. It drives the page's `prefers-color-scheme` and the window's own
+// parts (scrollbars, dialogs).
+const themeFile = path.join(app.getPath('userData'), 'theme.json');
+nativeTheme.themeSource = readTheme(themeFile);
 
 const isMac = process.platform === 'darwin';
 
@@ -30,6 +34,15 @@ function main() {
     env: { ...process.env },
     relocate,
     runCommand,
+    theme: () => nativeTheme.themeSource,
+    setTheme(theme) {
+      nativeTheme.themeSource = theme;
+      try {
+        writeTheme(themeFile, theme);
+      } catch {
+        /* not remembered; this run still uses it */
+      }
+    },
     autostart: () => autostart.isEnabled(app),
     setAutostart(enabled) {
       autostart.setEnabled(app, enabled, ctx.env.PATH || '');

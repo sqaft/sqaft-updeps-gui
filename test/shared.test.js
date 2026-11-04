@@ -4,8 +4,11 @@ import path from 'node:path';
 import { buildGraph, baseName } from '../src/shared/graph.js';
 import * as draft from '../src/shared/draft.js';
 import { summarize, ago, duration } from '../src/shared/status.js';
-import { cascade, mapLayout, islands, linkStates, lastPushes } from '../src/shared/tree.js';
+import { downstream, mapLayout, linkStates, lastPushes } from '../src/shared/map.js';
 import { parseLog, parseDoctor } from '../src/shared/parse.js';
+import { shownTab, stepTab, appearance } from '../src/shared/tabs.js';
+import { THEMES, isTheme, nextTheme } from '../src/shared/theme.js';
+import { symbolKey } from '../src/shared/keys.js';
 
 // Resolves like the CLI: `~` to a fixed home, everything else made absolute.
 const resolvePath = (p) => (p.startsWith('~/') ? path.posix.join('/home/me', p.slice(2)) : path.posix.resolve('/', p));
@@ -151,7 +154,7 @@ test('ago and duration', () => {
 });
 
 // lib → core → (api, worker); core → billing → api; ui → web; a lone repo.
-const tree = buildGraph(
+const sample = buildGraph(
   {
     repos: [
       { path: '/w/lib', name: '@acme/lib', packages: [{ path: '/w/core' }] },
@@ -164,42 +167,61 @@ const tree = buildGraph(
   resolvePath
 );
 
-test('cascade: tree rows from the focused repo, a repo reached twice is not expanded again', () => {
-  const c = cascade(tree, '/w/lib');
-  assert.deepEqual(
-    c.rows.map((r) => [r.prefix + baseName(r.edge.target), r.repeat, r.depth]),
-    [
-      ['└─ core', false, 0],
-      ['   ├─ api', false, 1],
-      ['   ├─ worker', false, 1],
-      ['   └─ billing', false, 1],
-      ['      └─ api', true, 2]
-    ]
-  );
-  assert.equal(c.count, 4);
-  assert.equal(c.depth, 2);
-  assert.deepEqual(cascade(tree, '/w/api'), { rows: [], count: 0, depth: 0 });
+test('downstream: the repos and links a push updates, the longest chain as its depth', () => {
+  const d = downstream(sample, '/w/lib');
+  assert.deepEqual([...d.repos].map(baseName).sort(), ['api', 'billing', 'core', 'lib', 'worker']);
+  assert.equal(d.edges.size, 5);
+  assert.equal(d.count, 4);
+  // lib → core → billing → api
+  assert.equal(d.depth, 3);
+  const leaf = downstream(sample, '/w/api');
+  assert.deepEqual([[...leaf.repos], leaf.edges.size, leaf.count, leaf.depth], [['/w/api'], 0, 0, 0]);
 });
 
-test('mapLayout: a band per island, columns by steps from the sources, the repos without links last', () => {
-  const size = { row: 40, gap: 10, head: 20, bandGap: 30 };
+test('downstream: a loop is followed once', () => {
+  const g = buildGraph(
+    {
+      repos: [
+        { path: '/w/a', packages: [{ path: '/w/b' }] },
+        { path: '/w/b', packages: [{ path: '/w/c' }] },
+        { path: '/w/c', packages: [{ path: '/w/a' }] }
+      ]
+    },
+    resolvePath
+  );
+  const d = downstream(g, '/w/a');
+  assert.deepEqual([...d.repos].map(baseName).sort(), ['a', 'b', 'c']);
+  assert.equal(d.edges.size, 3);
+  assert.equal(d.count, 2);
+  assert.equal(d.depth, 2);
+});
+
+test('mapLayout: columns by steps from the sources, groups one after another, the repos without links last', () => {
+  const size = { row: 40, gap: 10, title: 20 };
   const names = (ids) => ids.map((id) => baseName(id));
-  const map = mapLayout(tree, size);
+  const map = mapLayout(sample, size);
   assert.deepEqual(map.columns.map(names), [['lib', 'ui', 'alone'], ['core', 'web'], ['billing', 'worker'], ['api']]);
+  assert.deepEqual(names(map.order), ['lib', 'core', 'billing', 'worker', 'api', 'ui', 'web', 'alone']);
   assert.deepEqual(['/w/lib', '/w/billing', '/w/api', '/w/web', '/w/alone'].map((id) => map.column.get(id)), [0, 2, 3, 1, 0]);
-  assert.deepEqual(map.bands, [
-    { label: '@acme', size: 5, top: 0 },
-    { label: 'ui', size: 2, top: 140 },
-    { label: null, size: 1, top: 230 }
-  ]);
-  assert.deepEqual(['/w/ui', '/w/web', '/w/alone'].map((id) => map.band.get(id)), [1, 1, 2]);
+  assert.deepEqual(map.loose, { ids: ['/w/alone'], top: 150 });
   // billing and worker share core's centre; api sits between core and billing, the two repos it is linked to.
+  // The groups are a box gap apart: ui starts 10 below the 90 + 20 where the first group ends.
   assert.deepEqual(
     ['/w/lib', '/w/core', '/w/billing', '/w/worker', '/w/api', '/w/ui', '/w/web', '/w/alone'].map((id) => map.y.get(id)),
-    [65, 65, 40, 90, 53, 180, 180, 270]
+    [45, 45, 20, 70, 33, 120, 120, 190]
   );
-  assert.equal(map.height, 290);
-  assert.deepEqual(mapLayout({ nodes: [], edges: [] }, size), { columns: [[]], column: new Map(), y: new Map(), band: new Map(), bands: [], height: 0 });
+  assert.equal(map.height, 210);
+  assert.deepEqual(mapLayout({ nodes: [], edges: [] }, size), { columns: [[]], order: [], column: new Map(), y: new Map(), loose: null, height: 0 });
+});
+
+test('mapLayout: the repos without links fill the columns row by row under their heading', () => {
+  const g = buildGraph({ repos: [{ path: '/w/a', packages: [{ path: '/w/b' }] }, { path: '/w/c' }, { path: '/w/d' }, { path: '/w/e' }] }, resolvePath);
+  const map = mapLayout(g, { row: 40, gap: 10, title: 20 });
+  assert.deepEqual(map.loose, { ids: ['/w/c', '/w/d', '/w/e'], top: 50 });
+  assert.deepEqual(['/w/c', '/w/d', '/w/e'].map((id) => [map.column.get(id), map.y.get(id)]), [[0, 90], [1, 90], [0, 140]]);
+  assert.equal(map.height, 160);
+  const none = mapLayout(buildGraph({ repos: [{ path: '/w/a' }, { path: '/w/b' }] }, resolvePath), { row: 40, gap: 10, title: 20 });
+  assert.deepEqual([none.loose.top, none.height], [0, 110]);
 });
 
 test('mapLayout: a repo sits beside the repos it is linked to, without overlapping', () => {
@@ -212,30 +234,18 @@ test('mapLayout: a repo sits beside the repos it is linked to, without overlappi
     },
     resolvePath
   );
-  const map = mapLayout(g, { row: 40, gap: 10, head: 20, bandGap: 30 });
+  const map = mapLayout(g, { row: 40, gap: 10, title: 20 });
   // root sits level with the middle of a, b and c (c first: a source comes first in the config's order); d and e share c's centre as a block of two.
   assert.deepEqual(
     ['/w/root', '/w/c', '/w/a', '/w/b', '/w/d', '/w/e'].map((id) => map.y.get(id)),
-    [115, 65, 115, 165, 40, 90]
+    [95, 45, 95, 145, 20, 70]
   );
-  assert.equal(map.height, 185);
-});
-
-test('islands: linked repos by steps from their sources, largest first, named by their scope', () => {
-  const list = islands(tree);
-  assert.deepEqual(
-    list.map((i) => [i.label, i.ranks.map((rank) => rank.map((n) => baseName(n.id)))]),
-    [
-      ['@acme', [['lib'], ['core'], ['billing', 'worker'], ['api']]],
-      ['ui', [['ui'], ['web']]],
-      ['alone', [['alone']]]
-    ]
-  );
+  assert.equal(map.height, 165);
 });
 
 test('linkStates: running, queued and open failures over the latest journal result', () => {
   const states = linkStates(
-    tree,
+    sample,
     status({
       activeRun: { source: '@acme/core', targetPath: '/w/worker', startedAt: 5 },
       queue: { pending: 1, jobs: [{ target: 'api', targetPath: '/w/api', sources: ['@acme/billing'] }] },
@@ -310,4 +320,67 @@ test('parseDoctor: sections, repo sections, problems and the summary', () => {
   assert.equal(report.summary, '2 problem(s) found.');
   assert.equal(report.problems, 2);
   assert.equal(report.warnings, 1);
+});
+
+test('tabs: the active tab shows, else the first, and the active id is not replaced', () => {
+  const ids = ['link', 'update', 'when'];
+  assert.equal(shownTab(ids, 'update'), 'update');
+  assert.equal(shownTab(['repo', 'dependents'], 'update'), 'repo');
+  assert.equal(shownTab(ids, null), 'link');
+  assert.equal(shownTab([], 'update'), null);
+});
+
+test('tabs: stepping stops at the ends', () => {
+  const ids = ['link', 'update', 'when'];
+  assert.equal(stepTab(ids, 'update', 1), 'when');
+  assert.equal(stepTab(ids, 'when', 1), 'when');
+  assert.equal(stepTab(ids, 'link', -1), 'link');
+  assert.equal(stepTab(ids, null, 1), 'link');
+  assert.equal(stepTab([], 'link', 1), null);
+});
+
+test('tabs: a tab that appears is selected once per selection', () => {
+  let seen = null;
+  const next = (scope, present) => {
+    const r = appearance(seen, scope, present);
+    seen = r.seenFor;
+    return r.fresh;
+  };
+  assert.equal(next('a', false), false);
+  assert.equal(next('a', true), true);
+  assert.equal(next('a', true), false, 'not forced again on later ticks');
+  assert.equal(next('b', true), true, 'another selection that has it');
+  assert.equal(next('b', false), false);
+  assert.equal(next('b', true), true, 'it went away and came back');
+});
+
+test('theme: the button cycles system, dark, light and back', () => {
+  assert.deepEqual(THEMES, ['system', 'dark', 'light']);
+  assert.equal(nextTheme('system'), 'dark');
+  assert.equal(nextTheme('dark'), 'light');
+  assert.equal(nextTheme('light'), 'system');
+  assert.ok(isTheme('light'));
+  assert.ok(!isTheme('auto') && !isTheme(undefined) && !isTheme(null));
+});
+
+test('symbolKey: [ ] and \\ with Option (macOS) or AltGr (Windows, Linux), not with Cmd or a plain Ctrl', () => {
+  const press = (key, mods = {}) => ({ key, metaKey: false, ctrlKey: false, altKey: false, ...mods });
+  for (const key of ['[', ']', '\\']) {
+    assert.equal(symbolKey(press(key), 'darwin'), key);
+    // Turkish Q on a Mac: Option (with Shift) types the symbol.
+    assert.equal(symbolKey(press(key, { altKey: true }), 'darwin'), key);
+    assert.equal(symbolKey(press(key, { altKey: true, shiftKey: true }), 'darwin'), key);
+    // AltGr on Windows reports Ctrl and Alt together; on Linux it may report Alt alone.
+    assert.equal(symbolKey(press(key, { ctrlKey: true, altKey: true }), 'win32'), key);
+    assert.equal(symbolKey(press(key, { altKey: true }), 'linux'), key);
+    // Cmd always gives another meaning; so does Ctrl without AltGr, and Ctrl+Option on a Mac.
+    assert.equal(symbolKey(press(key, { metaKey: true }), 'darwin'), null);
+    assert.equal(symbolKey(press(key, { metaKey: true, altKey: true }), 'darwin'), null);
+    assert.equal(symbolKey(press(key, { ctrlKey: true }), 'win32'), null);
+    assert.equal(symbolKey(press(key, { ctrlKey: true }), 'linux'), null);
+    assert.equal(symbolKey(press(key, { ctrlKey: true, altKey: true }), 'darwin'), null);
+  }
+  // Other keys are not symbols, whatever the modifiers.
+  assert.equal(symbolKey(press('t'), 'darwin'), null);
+  assert.equal(symbolKey(press('1', { altKey: true }), 'darwin'), null);
 });

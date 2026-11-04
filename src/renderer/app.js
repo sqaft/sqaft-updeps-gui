@@ -1,5 +1,7 @@
-import { h, mount, stripAnsi, SPIN, spinner, typing, plural, keyButton, restoreFolds, toggleFold, resizer } from './dom.js';
+import { h, mount, stripAnsi, SPIN, spinner, typing, plural, keyButton, restoreLayout, toggleFold, toggleDock, dockedBottom, resizer } from './dom.js';
 import { summarize, ago } from '/shared/status.js';
+import { nextTheme } from '/shared/theme.js';
+import { symbolKey } from '/shared/keys.js';
 import * as dependenciesView from './views/dependencies.js';
 import * as activityView from './views/activity.js';
 import * as historyView from './views/history.js';
@@ -28,6 +30,7 @@ const DAEMON_COMMANDS = { start: 'starting', stop: 'stopping', restart: 'restart
  * @property {any} ctx       from `api.context()`
  * @property {any} status    from `api.readStatus()`, null when the CLI is missing
  * @property {any} service   from `api.inspectService()`
+ * @property {'system'|'dark'|'light'} theme  the window's theme choice
  * @property {boolean} busy  a CLI command started from the app is running
  * @property {string|null} busyCommand  its name (`retry`, `restart`, …)
  * @property {(args: string[]) => Promise<{ code: number|null, output: string }>} run
@@ -51,6 +54,7 @@ const app = {
   ctx: null,
   status: null,
   service: null,
+  theme: 'system',
   busy: false,
   busyCommand: null,
   run: (args) => api.run(args),
@@ -125,12 +129,27 @@ function renderNav() {
       })
     ),
     h(
-      'button',
-      { type: 'button', class: 'fold', title: 'Fold or unfold the menu ([)', onclick: () => toggleFold('nav') },
-      h('span', { class: 'key' }, '['),
-      h('span', { class: 'open' }, 'hide menu')
+      'div',
+      { class: 'nav-foot' },
+      h(
+        'button',
+        { type: 'button', class: 'theme', title: 'Cycle the theme: system, dark, light (t)', onclick: cycleTheme },
+        h('span', { class: 'key' }, 't'),
+        h('span', { class: 'label' }, `theme: ${app.theme}`)
+      ),
+      h(
+        'button',
+        { type: 'button', class: 'fold', title: 'Fold or unfold the menu ([)', onclick: () => toggleFold('nav') },
+        h('span', { class: 'key' }, '['),
+        h('span', { class: 'open' }, 'hide menu')
+      )
     )
   );
+}
+
+async function cycleTheme() {
+  app.theme = await api.setTheme(nextTheme(app.theme));
+  renderNav();
 }
 
 function renderStatusline() {
@@ -158,7 +177,7 @@ function renderStatusline() {
           h('button', { onclick: () => app.run(['restart']), disabled: app.busy, title: 'Restart the daemon to load it' }, 'R restart')
         )
       : null,
-    h('span', { class: 'hints' }, `${current?.hints || '1–5 switch views'} · [ ] panels`),
+    h('span', { class: 'hints' }, [current?.hints || '1–5 switch views', '[ ] panels', '\\ dock', 't theme', dockedBottom() && viewRoot.querySelector('.side-panel') ? ', . tabs' : null].filter(Boolean).join(' · ')),
     h('span', { class: 'version' }, app.ctx?.cli ? `updeps ${app.ctx.cli.version}` : 'updeps')
   );
 }
@@ -269,7 +288,9 @@ function closeDrawer() {
 }
 
 function onKey(e) {
-  if (e.metaKey || e.ctrlKey || e.altKey) {
+  // `[`, `]` and `\` may need Option or AltGr to type; Alt does not make them another shortcut.
+  const symbol = symbolKey(e, app.ctx?.platform);
+  if (!symbol && (e.metaKey || e.ctrlKey || e.altKey)) {
     if (current?.onKey?.(e)) e.preventDefault();
     return;
   }
@@ -286,9 +307,15 @@ function onKey(e) {
   if (Number.isInteger(index) && NAMES[index]) {
     e.preventDefault();
     go(NAMES[index]);
-  } else if (e.key === '[' || e.key === ']') {
+  } else if (symbol === '[' || symbol === ']') {
     e.preventDefault();
-    toggleFold(e.key === '[' ? 'nav' : 'side');
+    toggleFold(symbol === '[' ? 'nav' : 'side');
+  } else if (symbol === '\\') {
+    e.preventDefault();
+    toggleDock();
+  } else if (e.key === 't') {
+    e.preventDefault();
+    cycleTheme();
   } else if (e.key === 'R' && app.status?.daemon.running && !app.busy) {
     e.preventDefault();
     app.run(['restart']);
@@ -305,8 +332,13 @@ setInterval(() => {
 }, 100);
 
 async function boot() {
-  restoreFolds();
+  restoreLayout();
+  document.addEventListener('layoutchange', () => {
+    current?.onChanged?.('layout');
+    renderStatusline();
+  });
   app.ctx = await api.context();
+  app.theme = await api.readTheme();
   api.on('changed', onChanged);
   api.on('navigate', ({ view, selector }) => go(view, selector));
   api.on('command', onCommand);

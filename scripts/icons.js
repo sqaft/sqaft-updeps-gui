@@ -130,7 +130,7 @@ const hex = (h, alpha = 1) => [
   alpha
 ];
 
-// Palette (matches the renderer's tokens in src/renderer/styles.css).
+// The icons' own palette: they sit on any taskbar, so they do not follow the window's theme.
 const INK = '#1A1E23';
 const PAPER = '#E3E7ED';
 const AMBER = '#F0B45A';

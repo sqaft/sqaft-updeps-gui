@@ -1,8 +1,9 @@
-/* updeps: a terminal-style panel in a single dark theme. Everything is set
-   in a monospace face; sections are boxes with their title on the border,
-   and a statusline runs along the bottom. Colour means state and nothing else: amber is a running
-   or queued update, red an open failure, green an update that went through.
-   A selection is inverted text. */
+/* updeps: a terminal-style panel in a soft dark theme and a light one (the
+   tokens below). Everything is set in a monospace face; sections are boxes
+   with their title on the border, and a statusline runs along the bottom.
+   Colour means state and nothing else: amber is a running or queued update,
+   red an open failure, green an update that went through. A selection is
+   inverted text. */
 
 @font-face {
   font-family: 'JetBrains Mono';
@@ -25,46 +26,92 @@
 }
 
 :root {
-  --bg: #0e1013;
-  --panel: #13161a;
-  --raised: #1a1e23;
-  --line: #22272e;
-  --line-2: #2d333b;
-  --text: #e3e7ed;
-  --muted: #a2abb7;
-  --dim: #7c8592;
-  --tree: #4c5562;
+  --bg: #20242a;
+  --panel: #272c33;
+  --raised: #2f353d;
+  --line: #383f49;
+  --line-2: #47505b;
+  --text: #eceff3;
+  --muted: #bcc4ce;
+  --dim: #98a1ae;
+  --tree: #6e7785;
   --key: #f0b45a;
   --amber: #f0b45a;
   --queued: #c99a52;
-  --red: #f2705f;
-  --red-line: #7c3a33;
+  --red: #f77d6c;
+  --red-line: #b44d40;
   --green: #8ccf72;
   --sel-bg: #e3e7ed;
-  --sel-fg: #0e1013;
+  --sel-fg: #20242a;
   --sel-dim: #4a525d;
   --sel-red: #b3261e;
   --sel-key: #8a5a00;
-  --run-bg: #1c1a13;
-  --fail-bg: #211517;
-  --input: #0e1013;
-  --set-line: #59626e;
-  --bar-bg: #1a1e23;
+  --run-bg: #2e2b20;
+  --fail-bg: #352426;
+  --input: #1b1e23;
+  --set-line: #6f7885;
+  --bar-bg: #2f353d;
   --bar-text: #c4cbd4;
-  --bar-sep: #2d333b;
+  --bar-sep: #47505b;
   --ok-bg: #8ccf72;
-  --ok-fg: #0e1013;
+  --ok-fg: #20242a;
   --warn-bg: #f0b45a;
-  --warn-fg: #0e1013;
+  --warn-fg: #20242a;
   --off-bg: #4c5562;
   --off-fg: #e3e7ed;
-  --code: #c4cbd4;
+  --code: #d3d9e0;
   --shadow: rgba(0, 0, 0, 0.55);
+  /* How much of a repo or link on the map stays visible while another repo is selected. */
+  --dimmed: 0.55;
 
   --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   --display: 'Martian Mono', 'JetBrains Mono', ui-monospace, monospace;
   --box-bg: var(--bg);
   color-scheme: dark;
+}
+
+/* The light theme. Electron's `nativeTheme.themeSource` (system, dark or light,
+   chosen in the menu) decides whether this query matches. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --raised: #eceef2;
+    --line: #e0e3e9;
+    --line-2: #a5acb9;
+    --text: #1c2127;
+    --muted: #4d5663;
+    --dim: #5f6978;
+    --tree: #7f8896;
+    --key: #935d00;
+    --amber: #935d00;
+    --queued: #856429;
+    --red: #bf2f1b;
+    --red-line: #d0604e;
+    --green: #2c7a31;
+    --sel-bg: #1c2127;
+    --sel-fg: #f5f6f8;
+    --sel-dim: #a7afba;
+    --sel-red: #ff9c8e;
+    --sel-key: #f0b45a;
+    --run-bg: #fbf3e2;
+    --fail-bg: #fdecea;
+    --input: #ffffff;
+    --set-line: #858e9b;
+    --bar-bg: #e7eaef;
+    --bar-text: #3a424d;
+    --bar-sep: #a5acb9;
+    --ok-bg: #2c7a31;
+    --ok-fg: #ffffff;
+    --warn-bg: #935d00;
+    --warn-fg: #ffffff;
+    --off-bg: #667080;
+    --off-fg: #ffffff;
+    --code: #3a424d;
+    --shadow: rgba(0, 0, 0, 0.14);
+    --dimmed: 0.65;
+    color-scheme: light;
+  }
 }
 
 /* ---- base ----------------------------------------------------------------- */
@@ -382,7 +429,7 @@ textarea::placeholder {
   color: var(--text);
 }
 .nav a .num {
-  color: var(--tree);
+  color: var(--dim);
 }
 .nav a .badges {
   margin-left: auto;
@@ -411,9 +458,12 @@ textarea::placeholder {
   color: var(--sel-key);
 }
 
-/* Folding the side panels: `[` the menu, `]` the details panel on the right.
-   Each toggle holds the text for both states; the body class picks one. */
-.fold {
+/* Folding the side panels: `[` the menu, `]` the details panel. Each toggle
+   holds the text for both states; the body class picks one. The dock toggle
+   (`\`) and the theme toggle (`t`) are drawn like the fold ones. */
+.fold,
+.dock,
+.theme {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -424,7 +474,9 @@ textarea::placeholder {
   color: var(--dim);
   white-space: nowrap;
 }
-.fold:hover {
+.fold:hover,
+.dock:hover,
+.theme:hover {
   color: var(--text);
 }
 .fold .folded,
@@ -436,8 +488,10 @@ body.nav-folded .nav .fold .folded,
 body.side-folded .side-panel .fold .folded {
   display: inline;
 }
-.nav .fold {
+.nav-foot {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
 }
 body.nav-folded .nav {
   flex-basis: 52px;
@@ -467,6 +521,10 @@ body.nav-folded .nav a .num.fail {
 body.nav-folded .nav a .num.busy {
   color: var(--amber);
 }
+body.nav-folded .nav .theme .label {
+  display: none;
+}
+body.nav-folded .nav .theme,
 body.nav-folded .nav .fold {
   justify-content: center;
   padding: 0;
@@ -550,10 +608,26 @@ body.nav-folded .nav .fold {
 .side-panel.wide {
   flex-basis: var(--w, 470px);
 }
-.side-panel > .fold {
+/* The head holds the dock and fold buttons; at the bottom it holds the tabs
+   and the actions as well. */
+.side-head {
   flex: none;
-  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   margin: 6px 8px 0;
+}
+.tablist,
+.side-actions,
+.dock .to-right {
+  display: none;
+}
+body.dock-bottom .dock .to-bottom {
+  display: none;
+}
+body.dock-bottom .dock .to-right {
+  display: inline;
 }
 .side-body {
   flex: 1;
@@ -570,13 +644,15 @@ body.nav-folded .nav .fold {
 body.side-folded .side-panel {
   flex-basis: 34px;
 }
-body.side-folded .side-body,
+body.side-folded .side-panel .side-body,
 body.side-folded .side-panel > .resizer,
-body.nav-folded .nav > .resizer {
+body.nav-folded .nav > .resizer,
+body.side-folded .side-head > .dock {
   display: none;
 }
 
-/* A panel's inner edge drags its width (`--w` on the panel). */
+/* A panel's inner edge drags its size: the width (`--w` on the panel) on the
+   left, the height (`--h`) on the top. */
 .resizer {
   position: absolute;
   top: 0;
@@ -592,25 +668,173 @@ body.nav-folded .nav > .resizer {
 .resizer.left {
   left: -4px;
 }
+.resizer.top {
+  top: -4px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 7px;
+  cursor: row-resize;
+}
 .resizer:hover,
 .resizer.active {
   background: linear-gradient(var(--key), var(--key)) center / 1px 100% no-repeat;
+}
+.resizer.top:hover,
+.resizer.top.active {
+  background: linear-gradient(var(--key), var(--key)) center / 100% 1px no-repeat;
 }
 body.resizing {
   cursor: col-resize;
   user-select: none;
 }
-body.side-folded .side-panel > .fold {
+body.resizing.resizing-y {
+  cursor: row-resize;
+}
+body.dock-bottom .side-panel > .resizer.left,
+body:not(.dock-bottom) .side-panel > .resizer.top {
+  display: none;
+}
+
+/* Folded on the right: a thin strip with the label written downwards. */
+body.side-folded:not(.dock-bottom) .side-head {
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+}
+body.side-folded:not(.dock-bottom) .side-head > .fold {
   flex: 1;
   flex-direction: column;
   justify-content: flex-start;
-  align-self: stretch;
   height: auto;
-  margin: 0;
   padding: 14px 0;
 }
-body.side-folded .side-panel > .fold .folded:not(.key) {
+body.side-folded:not(.dock-bottom) .side-head > .fold .folded:not(.key) {
   writing-mode: vertical-rl;
+}
+
+/* Docked at the bottom: the panel sits under the main area, which keeps its
+   room; the head carries the tab strip. Folded, it is a strip with its label. */
+body.dock-bottom .screen {
+  flex-direction: column;
+}
+body.dock-bottom .screen > main {
+  min-height: 260px;
+}
+body.dock-bottom .side-panel,
+body.dock-bottom .side-panel.wide {
+  flex: 0 1 var(--h, 300px);
+  min-height: 160px;
+  border-left: 0;
+  border-top: 1px solid var(--line);
+}
+body.dock-bottom.side-folded .side-panel,
+body.dock-bottom.side-folded .side-panel.wide {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+body.dock-bottom .side-head {
+  margin: 0;
+  padding: 0 8px 0 12px;
+  min-height: 30px;
+  border-bottom: 1px solid var(--line);
+}
+body.dock-bottom .side-head > .dock {
+  margin-left: auto;
+}
+body.dock-bottom.side-folded .side-head {
+  justify-content: flex-start;
+  border-bottom: 0;
+}
+.side-panel.tabbed .tablist {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 120px;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.side-panel.tabbed .side-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 8px;
+}
+body.side-folded .side-panel.tabbed .tablist,
+body.side-folded .side-panel.tabbed .side-actions {
+  display: none;
+}
+.tab {
+  flex: none;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab[aria-selected='true'] {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.tab[data-tone='failed'] {
+  color: var(--red);
+}
+.tab[data-tone='running'] {
+  color: var(--amber);
+}
+.side-actions .confirm {
+  justify-content: flex-end;
+  gap: 2px 10px;
+  padding: 0;
+  border: 0;
+}
+.side-actions .confirm > span {
+  flex-basis: auto;
+  max-width: 34em;
+}
+
+/* A tab's section needs no border or legend (the tab names it); its fields
+   flow into as many columns as fit, and the rest spans the width. */
+.side-panel.tabbed .side-body {
+  display: block;
+  padding: 14px 16px 18px;
+}
+.side-panel.tabbed .side-body > [data-tab] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-items: start;
+  gap: 12px 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.side-panel.tabbed .side-body > [data-tab] > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.side-panel.tabbed .side-body > [data-tab] > .field {
+  grid-column: auto;
+}
+.side-panel.tabbed .side-body > [data-tab] > .legend {
+  display: none;
+}
+.side-panel.tabbed .facts {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 2px 10px;
+}
+.side-panel.tabbed .facts dd + dt {
+  margin-top: 0;
 }
 
 /* A box with its title on the border. */
@@ -818,34 +1042,16 @@ pre.output {
   overflow-wrap: anywhere;
 }
 
-/* ---- tree table (Dependencies, History) ----------------------------------- */
+/* ---- update rows (History) ------------------------------------------------- */
 
-.table {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  outline: none;
-}
-.table:focus-visible {
-  border-color: var(--key);
-}
-.table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px 76px 168px;
+  grid-template-columns: minmax(0, 1fr) 108px 76px 56px;
   align-items: center;
   gap: 0 8px;
-  padding: 0 12px;
-}
-.table-head {
-  height: 28px;
-  border-bottom: 1px solid var(--line);
-  color: var(--dim);
-  font-size: 11.5px;
-}
-.table-row {
   width: 100%;
-  height: 30px;
+  height: 28px;
+  padding: 0 12px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -862,26 +1068,11 @@ pre.output {
 .table-row .branch {
   color: var(--tree);
 }
-.table-row .when,
 .table-row .sub {
   color: var(--muted);
 }
-.table-row .runs {
-  color: var(--dim);
-}
-.table-row.repeat .name {
-  color: var(--muted);
-}
-.table-row.head {
-  height: 34px;
-  border-bottom: 1px solid var(--line);
-  background: var(--raised);
-}
-.table-row.head .name {
-  font-weight: 700;
-}
-.table-row.running {
-  background: var(--run-bg);
+.table-row .dur {
+  text-align: right;
 }
 .table-row[aria-selected='true'] {
   background: var(--sel-bg);
@@ -890,9 +1081,7 @@ pre.output {
 }
 .table-row[aria-selected='true'] > span,
 .table-row[aria-selected='true'] .branch,
-.table-row[aria-selected='true'] .when,
-.table-row[aria-selected='true'] .sub,
-.table-row[aria-selected='true'] .runs {
+.table-row[aria-selected='true'] .sub {
   color: var(--sel-dim);
 }
 .table-row[aria-selected='true'] .name {
@@ -904,34 +1093,42 @@ pre.output {
 .table-row[aria-selected='true'] .status:not(.s-failed) {
   color: var(--sel-fg);
 }
-.table .empty {
-  padding: 12px;
-}
 
 /* ---- Dependencies ---------------------------------------------------------- */
 
-.upstream {
-  color: var(--dim);
-}
-.upstream .btn {
-  height: 26px;
-  padding: 0 8px;
-}
-.tallies {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  color: var(--muted);
-}
 /* The map: boxes placed by views/dependencies.js, joined by lines drawn under them. */
+.scroll:has(> .map-view) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.scroll.panning {
+  cursor: grabbing;
+  user-select: none;
+}
+.map-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* The one scroller of the map, both ways. */
 .graph-scroll {
-  overflow-x: auto;
-  padding-bottom: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  cursor: grab;
   /* Its width comes from the page, not the map, so a wide map scrolls here instead of widening the window's content. */
   contain: inline-size;
 }
+.scroll.panning .graph-scroll {
+  cursor: grabbing;
+}
+/* `zoom` is set inline on the map; the scroll sizes follow it. */
 .graph {
   position: relative;
+  user-select: none;
 }
 .gtitle {
   position: absolute;
@@ -939,24 +1136,6 @@ pre.output {
   color: var(--dim);
   font-size: 11.5px;
   white-space: nowrap;
-}
-/* An island's title, with a rule across the map. */
-.gband {
-  position: absolute;
-  left: 0;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-  font-family: var(--display);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.gband::after {
-  content: '';
-  flex: 1;
-  border-top: 1px dashed var(--line-2);
 }
 .gedges {
   position: absolute;
@@ -987,11 +1166,11 @@ pre.output {
 .gedge:hover {
   color: var(--dim);
 }
-/* The links of the selected repo; a running, failed or queued one keeps its colour. */
-.gedge.linked {
+/* What a push to the selected repo updates and the links into it; a running, failed or queued one keeps its colour. */
+.gedge.lit {
   color: var(--muted);
 }
-.gedge.linked .line {
+.gedge.lit .line {
   stroke-width: 1.75;
 }
 .gedge.queued .line {
@@ -1092,15 +1271,47 @@ pre.output {
 .gnode[aria-selected='true'] .s-failed {
   color: var(--sel-red);
 }
+/* With a repo selected, what its push does not update dims; a state keeps its colour. */
+.graph.focused .gnode:not(.lit):not(.running):not(.failed):not(.queued),
+.graph.focused .gedge:not(.lit):not(.running):not(.failed):not(.queued):not(.selected) {
+  opacity: var(--dimmed);
+}
 .graph-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px 16px;
   color: var(--dim);
   font-size: 11.5px;
 }
 .graph-legend .grow {
   margin-left: auto;
+}
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.zoom > button:not(.btn) {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+}
+.zoom > button:not(.btn):hover {
+  border-color: var(--dim);
+}
+.zoom .level {
+  min-width: 4ch;
+  text-align: center;
+  color: var(--muted);
+}
+.zoom .btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
 }
 .savebar {
   display: flex;
@@ -1355,13 +1566,6 @@ pre.output {
 .group-head[aria-selected='true'] .time,
 .group-head[aria-selected='true'] .sha {
   color: var(--sel-dim);
-}
-.groups .table-row {
-  grid-template-columns: minmax(0, 1fr) 108px 76px 56px;
-  height: 28px;
-}
-.groups .table-row .dur {
-  text-align: right;
 }
 .target {
   display: flex;

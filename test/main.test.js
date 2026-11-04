@@ -9,6 +9,7 @@ import path from 'node:path';
 import { findExecutable, cliRootFromCommand, readCliPackage, locateCli, mergePaths, runCli } from '../src/main/cli.js';
 import { renderAppPlist, renderDesktopEntry } from '../src/main/autostart.js';
 import { watchFiles } from '../src/main/watch.js';
+import { readTheme, writeTheme } from '../src/main/theme.js';
 
 const isWindows = process.platform === 'win32';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'updeps-gui-test-'));
@@ -118,4 +119,17 @@ test('watchFiles reports a replaced file by name and ticks', async () => {
   } finally {
     stop();
   }
+});
+
+test('the theme choice is remembered in a file; a missing, broken or unknown one means system', () => {
+  const file = path.join(tmp, 'userData', 'theme.json');
+  assert.equal(readTheme(file), 'system');
+  writeTheme(file, 'light');
+  assert.equal(readTheme(file), 'light');
+  writeTheme(file, 'dark');
+  assert.equal(readTheme(file), 'dark');
+  fs.writeFileSync(file, '{"theme":"sepia"}');
+  assert.equal(readTheme(file), 'system');
+  fs.writeFileSync(file, 'not json');
+  assert.equal(readTheme(file), 'system');
 });
