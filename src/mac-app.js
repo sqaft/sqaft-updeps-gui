@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const BUNDLE_ID = 'com.sqaft.updeps.app';
+export const BUNDLE_ID = 'com.sqaft.updeps.gui';
 const ICON = fileURLToPath(new URL('../assets/icon.icns', import.meta.url));
 
 /** Where updeps.app is kept: the app's own data folder, which an app update leaves alone. */

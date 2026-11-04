@@ -4,7 +4,7 @@ import path from 'node:path';
 import { buildGraph, baseName } from '../src/shared/graph.js';
 import * as draft from '../src/shared/draft.js';
 import { summarize, ago, duration } from '../src/shared/status.js';
-import { cascade, islands, linkStates, lastPushes } from '../src/shared/tree.js';
+import { cascade, mapLayout, islands, linkStates, lastPushes } from '../src/shared/tree.js';
 import { parseLog, parseDoctor } from '../src/shared/parse.js';
 
 // Resolves like the CLI: `~` to a fixed home, everything else made absolute.
@@ -179,6 +179,46 @@ test('cascade: tree rows from the focused repo, a repo reached twice is not expa
   assert.equal(c.count, 4);
   assert.equal(c.depth, 2);
   assert.deepEqual(cascade(tree, '/w/api'), { rows: [], count: 0, depth: 0 });
+});
+
+test('mapLayout: a band per island, columns by steps from the sources, the repos without links last', () => {
+  const size = { row: 40, gap: 10, head: 20, bandGap: 30 };
+  const names = (ids) => ids.map((id) => baseName(id));
+  const map = mapLayout(tree, size);
+  assert.deepEqual(map.columns.map(names), [['lib', 'ui', 'alone'], ['core', 'web'], ['billing', 'worker'], ['api']]);
+  assert.deepEqual(['/w/lib', '/w/billing', '/w/api', '/w/web', '/w/alone'].map((id) => map.column.get(id)), [0, 2, 3, 1, 0]);
+  assert.deepEqual(map.bands, [
+    { label: '@acme', size: 5, top: 0 },
+    { label: 'ui', size: 2, top: 140 },
+    { label: null, size: 1, top: 230 }
+  ]);
+  assert.deepEqual(['/w/ui', '/w/web', '/w/alone'].map((id) => map.band.get(id)), [1, 1, 2]);
+  // billing and worker share core's centre; api sits between core and billing, the two repos it is linked to.
+  assert.deepEqual(
+    ['/w/lib', '/w/core', '/w/billing', '/w/worker', '/w/api', '/w/ui', '/w/web', '/w/alone'].map((id) => map.y.get(id)),
+    [65, 65, 40, 90, 53, 180, 180, 270]
+  );
+  assert.equal(map.height, 290);
+  assert.deepEqual(mapLayout({ nodes: [], edges: [] }, size), { columns: [[]], column: new Map(), y: new Map(), band: new Map(), bands: [], height: 0 });
+});
+
+test('mapLayout: a repo sits beside the repos it is linked to, without overlapping', () => {
+  const g = buildGraph(
+    {
+      repos: [
+        { path: '/w/root', packages: [{ path: '/w/a' }, { path: '/w/b' }, { path: '/w/c' }] },
+        { path: '/w/c', packages: [{ path: '/w/d' }, { path: '/w/e' }] }
+      ]
+    },
+    resolvePath
+  );
+  const map = mapLayout(g, { row: 40, gap: 10, head: 20, bandGap: 30 });
+  // root sits level with the middle of a, b and c (c first: a source comes first in the config's order); d and e share c's centre as a block of two.
+  assert.deepEqual(
+    ['/w/root', '/w/c', '/w/a', '/w/b', '/w/d', '/w/e'].map((id) => map.y.get(id)),
+    [115, 65, 115, 165, 40, 90]
+  );
+  assert.equal(map.height, 185);
 });
 
 test('islands: linked repos by steps from their sources, largest first, named by their scope', () => {

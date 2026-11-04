@@ -1,11 +1,12 @@
-# @sqaft/updeps-app
+# @sqaft/updeps-gui
 
 The desktop app for [updeps](https://github.com/sqaft/sqaft-updeps-cli), on macOS,
 Linux and Windows:
 
-- **Dependencies**: what a push to a repo updates, as a tree of its links
-  (focus), and every repo in islands of linked repos (map), each with what the
-  daemon is doing or did last. Add repos, link a package to the repos that
+- **Dependencies**: every repo and link on a map, each island of linked repos
+  in columns by steps from its sources (map), and what a push to one repo
+  updates as a tree of its links (tree), each repo with what the daemon is
+  doing or did last. Click a repo or a link on the map to edit it. Add repos, link a package to the repos that
   depend on it, and edit each link's commands, triggers, branches and safety
   settings; a value a link inherits shows where it comes from. Every edit is
   checked by updeps as you type (errors, unknown fields, loops) and written to
@@ -19,9 +20,12 @@ Linux and Windows:
   started it with its commands and output, the log in columns with filters, and
   `updeps doctor` as a checklist.
 
-The window works from the keyboard: `1`–`5` switch views, `R` restarts the
-daemon, and the statusline at the bottom lists the keys of the view you are in
-(`j`/`k` to move, `/` to search, `s` to save, `r` to retry…).
+The window has a single, dark theme. It works from the keyboard: `1`–`5`
+switch views, `[` and `]` fold the menu on the left and the details panel on
+the right (drag their inner edge to resize them, double-click it for the
+default width), `R` restarts the daemon, and the statusline at the bottom lists the
+keys of the view you are in (`j`/`k` to move, `/` to search, `m` to switch
+between map and tree, `s` to save, `r` to retry…).
 
 The app works with the updeps CLI installed on the same computer, the one the
 daemon runs: it reads the config, state and journal through the CLI's API
@@ -42,13 +46,13 @@ updeps gui uninstall  # removes it
 ```
 
 `updeps gui install` puts the app in updeps' own data directory
-(`~/.local/share/sqaft-updeps/app`, `%LOCALAPPDATA%\sqaft-updeps\app` on
+(`~/.local/share/sqaft-updeps/gui`, `%LOCALAPPDATA%\sqaft-updeps\gui` on
 Windows) with npm, so nothing is installed globally. It downloads Electron
-during the install (about 100 MB, 350 MB on disk). Requires Node.js 22+ and updeps 0.1.0 or newer (the first
-version with `updeps gui` and the API the app uses).
+during the install (about 100 MB, 350 MB on disk). Requires Node.js 22+ and updeps 0.2.0 or newer (the first
+version whose `updeps gui` installs this package).
 
-The app can also be installed on its own with `npm install -g @sqaft/updeps-app`
-and started with `updeps-app`.
+The app can also be installed on its own with `npm install -g @sqaft/updeps-gui`
+and started with `updeps-gui`.
 
 The window opens and the app stays in the system tray when you close it. To
 start it at login, turn on **Start at login** in the tray menu.
@@ -64,8 +68,8 @@ desktops have one; on GNOME install the "AppIndicator and KStatusNotifierItem
 Support" extension (Ubuntu ships it).
 
 ```
-updeps-app [--hidden] [--foreground]
-updeps-app --prepare
+updeps-gui [--hidden] [--foreground]
+updeps-gui --prepare
 
   --hidden       start in the system tray without opening the window
   --foreground   stay attached to the terminal and print the app's output
@@ -86,8 +90,8 @@ of `sqaft-updeps-cli`). If no CLI is found, the window says how to install it.
 
 | Platform | Entry |
 |---|---|
-| macOS | `~/Library/LaunchAgents/com.sqaft.updeps.app.plist` |
-| Linux | `~/.config/autostart/sqaft-updeps-app.desktop` |
+| macOS | `~/Library/LaunchAgents/com.sqaft.updeps.gui.plist` |
+| Linux | `~/.config/autostart/sqaft-updeps-gui.desktop` |
 | Windows | the user's Run key (Task Manager › Startup apps) |
 
 On macOS and Linux the entry runs `node` through the PATH saved when you turn the
@@ -110,14 +114,14 @@ masked before they are shown.
 ## Development
 
 ```bash
-git clone https://github.com/sqaft/sqaft-updeps-app
-cd sqaft-updeps-app
+git clone https://github.com/sqaft/sqaft-updeps-gui
+cd sqaft-updeps-gui
 npm install
 npm start                 # runs the app from the working copy (on macOS under Electron's name)
-UPDEPS_APP=$PWD updeps gui   # opens this working copy through the CLI
+UPDEPS_GUI=$PWD updeps gui   # opens this working copy through the CLI
 npm test                  # node:test, no Electron needed
 npm run icons             # redraws assets/ (tray and app icons)
-npm run screenshots -- <dir> [view[:repo] ...]   # PNGs of each view, light and dark
+npm run screenshots -- <dir> [view[@map|@tree][:repo][+folded] ...]   # a PNG of each view
 ```
 
 There is no build step: the main process and the page are plain ES modules, and

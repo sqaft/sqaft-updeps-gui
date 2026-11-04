@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, protocol, shell, nativeTheme } from 'electron';
+import { BrowserWindow, protocol, shell } from 'electron';
 
 const require = createRequire(import.meta.url);
 const SRC = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -10,6 +10,9 @@ const ASSETS = path.resolve(fileURLToPath(new URL('../../assets/', import.meta.u
 const PRELOAD = fileURLToPath(new URL('../preload.cjs', import.meta.url));
 
 export const APP_ORIGIN = 'app://updeps';
+
+/** The page's background (`--bg` in styles.css), shown before it paints. */
+const BACKGROUND = '#0E1013';
 
 /**
  * Directory of an installed package (works for packages that do not export
@@ -98,7 +101,7 @@ export function createWindow({ view } = {}) {
     title: 'updeps',
     show: false,
     icon: process.platform === 'darwin' ? undefined : path.join(ASSETS, 'icon.png'),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#12110F' : '#F6F3EC',
+    backgroundColor: BACKGROUND,
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,

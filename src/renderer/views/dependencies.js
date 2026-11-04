@@ -1,11 +1,11 @@
-// The dependency editor. Focus lists the repos a push to one repo updates, as
-// a tree whose rows are links; Map shows every repo in islands of linked
-// repos, one row per step from the sources. Edits go to a draft that the CLI
+// The dependency editor. Map draws every repo and link: each island of linked
+// repos a band, one column per step from its sources. Tree shows the repos a
+// push to one repo updates, as rows of links. Edits go to a draft that the CLI
 // checks as you type and that is written to the config file only on save.
-import { h, mount, box, keyButton, glyph, LOOK, typing, plural, tildify } from '../dom.js';
+import { h, svg, mount, box, keyButton, glyph, LOOK, SPIN, typing, plural, tildify, sidePanel } from '../dom.js';
 import { field } from '../fields.js';
 import { ago, duration } from '/shared/status.js';
-import { cascade, islands, linkStates, lastPushes } from '/shared/tree.js';
+import { cascade, mapLayout, linkStates, lastPushes } from '/shared/tree.js';
 import { baseName } from '/shared/graph.js';
 import { describeChanges, removeLink, setDefaultsField, setLinkField, setRepoField, setRootField, sameJson } from '/shared/draft.js';
 
@@ -19,12 +19,33 @@ const SECTIONS = [
 
 const HINTS = {
   commitMessage: '{bumps} lists each source with its commit',
-  commitPaths: 'globs; other files the commands change are left alone and reported',
+  commitPaths: 'globs, one per line; other files the commands change are left alone and reported',
   push: 'pushing also triggers the repos that depend on this one',
   coalesce: 'one run when several sources trigger it close together',
   dirtyPolicy: 'with uncommitted work: selective commits only the files to commit, skip leaves the repo alone',
   waitTimeoutSec: '0 waits as long as it takes'
 };
+
+/**
+ * The map in px: the limits of a column's width (it fits its longest line),
+ * the box height, the gaps between boxes and between columns, the room for
+ * the column titles, for a band's title and between bands, and how wide a
+ * character is (JetBrains Mono is 0.6em: 12px names, 11px status lines).
+ */
+const MAP = { minWidth: 120, maxWidth: 260, row: 46, gap: 10, columnGap: 44, head: 24, bandHead: 30, bandGap: 22, char: 7.2, subChar: 6.6 };
+
+/** Which link line is drawn on top. */
+const LINE_RANK = { '': 0, queued: 1, failed: 2, running: 3, linked: 4, selected: 5 };
+
+/** Remembers whether the map or the tree shows. */
+const MODE_KEY = 'dependencies.mode';
+function storedMode() {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'tree' ? 'tree' : 'map';
+  } catch {
+    return 'map';
+  }
+}
 
 /**
  * @param {HTMLElement} root
@@ -40,10 +61,11 @@ export function create(root, app) {
     draft: null,
     check: null,
     history: [],
-    mode: 'focus',
-    focus: null, // node id
+    mode: storedMode(), // 'map' | 'tree'
+    focus: null, // node id the tree starts from
     selection: null, // { type: 'node' | 'edge', id }; null shows the defaults
     connectFrom: null, // node id while picking its new dependent
+    connectReturn: null, // the mode to go back to after picking it
     confirm: null, // 'node' | 'edge' while asking to remove it
     query: null, // search text while the search field is in use
     pick: 0, // highlighted suggestion
@@ -58,7 +80,7 @@ export function create(root, app) {
   const tabs = h('div', { class: 'tabs' });
   const search = h('input', {
     type: 'text',
-    'aria-label': 'Focus on a repo',
+    'aria-label': 'Find a repo',
     placeholder: 'repo name',
     spellcheck: false,
     onfocus: (e) => e.target.select(),
@@ -79,7 +101,7 @@ export function create(root, app) {
   const count = h('span', { class: 'count' });
   const content = h('div', { class: 'scroll' });
   const savebar = h('div', { class: 'savebar' });
-  const inspector = h('aside', { class: 'side-panel', 'aria-label': 'Details' });
+  const { el: panel, body: inspector } = sidePanel({ label: 'Details' });
 
   root.append(
     h(
@@ -100,7 +122,7 @@ export function create(root, app) {
         content,
         savebar
       ),
-      inspector
+      panel
     )
   );
 
@@ -224,29 +246,37 @@ export function create(root, app) {
     return st.selection.type === 'node' ? nodeById(st.selection.id) : edgeById(st.selection.id);
   }
 
+  /** Shows the tree of what a push to a repo updates. */
   function focusOn(id, { selectIt = true } = {}) {
     st.focus = id;
-    st.mode = 'focus';
     st.query = null;
     search.value = nameOf(id);
-    renderToolbar();
+    setMode('tree');
     if (selectIt) select({ type: 'node', id });
-    else renderContent();
   }
 
-  /** A repo picked from the map or the search: connects it while adding a dependent, else focuses it. */
+  /**
+   * A repo picked from the map or the search: connects it while adding a
+   * dependent; else the map selects it and the tree focuses it.
+   */
   function pickRepo(id) {
     if (st.connectFrom) {
       const target = nodeById(id);
       if (id === st.connectFrom || !target) return endConnect();
       return connectTo({ path: target.path });
     }
-    focusOn(id);
+    if (st.mode !== 'map') return focusOn(id);
+    select({ type: 'node', id });
+    content.querySelector('.gnode[aria-selected="true"]')?.scrollIntoView({ block: 'center', inline: 'center' });
   }
 
+  /** @param {'map'|'tree'} mode */
   function setMode(mode) {
     st.mode = mode;
-    if (mode === 'focus') st.connectFrom = null;
+    st.connectFrom = null;
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {}
     renderToolbar();
     renderContent();
   }
@@ -261,7 +291,9 @@ export function create(root, app) {
     focusOn(info.path);
   }
 
+  /** Shows the map to pick the repo that depends on `fromId`. */
   function startConnect(fromId) {
+    st.connectReturn = st.connectFrom ? st.connectReturn : st.mode;
     st.connectFrom = fromId;
     st.mode = 'map';
     renderToolbar();
@@ -270,7 +302,7 @@ export function create(root, app) {
 
   function endConnect() {
     st.connectFrom = null;
-    st.mode = 'focus';
+    st.mode = st.connectReturn || st.mode;
     renderToolbar();
     renderContent();
   }
@@ -288,8 +320,8 @@ export function create(root, app) {
     // A repo that only depended on others so far becomes a source; its package name comes from its manifest.
     const name = from.isSource ? undefined : (await api.inspectRepo(from.path)).packageName;
     const res = await editStructure('connect', { source: { path: from.path, name }, target });
-    st.focus = from.id;
-    st.mode = 'focus';
+    if (st.connectReturn === 'tree') st.focus = from.id;
+    st.mode = st.connectReturn || st.mode;
     renderToolbar();
     select({ type: 'edge', id: `${res.repoIndex}:${res.packageIndex}` });
   }
@@ -320,17 +352,16 @@ export function create(root, app) {
 
   const states = () => linkStates(graph(), app.status, st.history);
 
-  /** A node's live state: what runs, waits or failed on a link into it. */
-  function nodeState(id, linkState) {
-    let best = null;
-    for (const e of graph().edges) {
-      if (e.target !== id) continue;
-      const kind = linkState.get(e.id)?.kind;
-      if (kind === 'running') return 'running';
-      if (kind === 'failed') best = 'failed';
-      else if (kind === 'queued' && best !== 'failed') best = 'queued';
+  /** The link into a repo whose state its map box shows: a running, failed or queued one first, else the latest. */
+  function leadInto(id, ls) {
+    const into = graph().edges.filter((e) => e.target === id);
+    for (const kind of ['running', 'failed', 'queued']) {
+      const e = into.find((x) => ls.get(x.id)?.kind === kind);
+      if (e) return e;
     }
-    return best;
+    let lead = into[0] ?? null;
+    for (const e of into) if ((ls.get(e.id)?.ts ?? -1) > (ls.get(lead.id)?.ts ?? -1)) lead = e;
+    return lead;
   }
 
   /** The open failure on a link, if any. */
@@ -386,11 +417,11 @@ export function create(root, app) {
   // ---- toolbar -------------------------------------------------------------------
 
   function renderToolbar() {
+    const tab = (label, on, onclick, title) => h('button', { 'aria-pressed': String(on), onclick, title }, `[${label}]`);
     mount(
       tabs,
-      ['map', 'focus'].map((mode) =>
-        h('button', { 'aria-pressed': String(st.mode === mode), onclick: () => setMode(mode), title: mode === 'map' ? 'Every repo (m)' : 'What a push to one repo updates (m)' }, `[${mode}]`)
-      )
+      tab('map', st.mode === 'map', () => setMode('map'), 'Every repo and its links (m)'),
+      tab('tree', st.mode === 'tree', () => setMode('tree'), 'What a push to one repo updates (m)')
     );
     if (document.activeElement !== search) search.value = st.focus ? nameOf(st.focus) : '';
     const g = graph();
@@ -453,7 +484,7 @@ export function create(root, app) {
     }
   }
 
-  // ---- content: focus and map --------------------------------------------------
+  // ---- content: map and tree ---------------------------------------------------
 
   function renderContent() {
     if (st.fileError) {
@@ -474,16 +505,49 @@ export function create(root, app) {
       return;
     }
     const scrollTop = content.scrollTop;
-    mount(content, st.mode === 'map' ? mapView() : focusView());
+    // A wide map scrolls sideways in its own box and keeps its place.
+    const scrollLeft = content.querySelector('.graph-scroll')?.scrollLeft ?? 0;
+    mount(content, st.mode === 'map' ? mapView() : treeView());
     content.scrollTop = scrollTop;
+    const wide = content.querySelector('.graph-scroll');
+    if (wide) wide.scrollLeft = scrollLeft;
   }
 
-  function focusView() {
+  function treeView() {
     const g = graph();
     const focus = st.focus;
     const ls = states();
     const tree = cascade(g, focus);
     const pushes = lastPushes(app.status, st.history);
+
+    const tally = new Map();
+    for (const r of tree.rows) {
+      if (r.repeat) continue;
+      const kind = ls.get(r.edge.id)?.kind;
+      if (kind) tally.set(kind, (tally.get(kind) || 0) + 1);
+    }
+
+    return h(
+      'div',
+      { class: 'stack' },
+      treeParts(focus, ls, pushes, tree),
+      h(
+        'div',
+        { class: 'tallies' },
+        h(
+          'span',
+          null,
+          tree.count
+            ? `a push to ${nameOf(focus)} updates ${plural(tree.count, 'repo')} in ${plural(tree.depth, 'step')}`
+            : `a push to ${nameOf(focus)} updates nothing yet`
+        ),
+        ['updated', 'failed', 'running', 'queued'].filter((k) => tally.get(k)).map((k) => h('span', { class: LOOK[k].cls }, `${tally.get(k)} ${k}`))
+      )
+    );
+  }
+
+  function treeParts(focus, ls, pushes, tree) {
+    const g = graph();
     const upstream = g.edges.filter((e) => e.target === focus);
     const focusNode = nodeById(focus);
     const push = pushes.get(focusNode?.name);
@@ -492,7 +556,8 @@ export function create(root, app) {
     const rows = tree.rows.map((r) => {
       const state = ls.get(r.edge.id);
       const look = LOOK[state?.kind || 'none'];
-      const cmd = String(effective(r.edge, 'commands')?.[0] ?? '').split(/\s+/).slice(0, 2).join(' ');
+      const commands = effective(r.edge, 'commands') ?? [];
+      const cmd = String(commands[0] ?? '').split(/\s+/).slice(0, 2).join(' ') + (commands.length > 1 ? ` +${commands.length - 1}` : '');
       const own = Object.keys(linkOf(r.edge)).some((k) => k !== 'path' && k !== 'name');
       const selected = st.selection?.type === 'edge' && st.selection.id === r.edge.id;
       return h(
@@ -511,16 +576,7 @@ export function create(root, app) {
       );
     });
 
-    const tally = new Map();
-    for (const r of tree.rows) {
-      if (r.repeat) continue;
-      const kind = ls.get(r.edge.id)?.kind;
-      if (kind) tally.set(kind, (tally.get(kind) || 0) + 1);
-    }
-
-    return h(
-      'div',
-      { class: 'stack' },
+    return [
       h(
         'div',
         { class: 'row upstream' },
@@ -548,25 +604,143 @@ export function create(root, app) {
         ),
         rows,
         rows.length ? null : h('p', { class: 'empty' }, 'no dependents yet. select the repo above and add one.')
-      ),
-      h(
-        'div',
-        { class: 'tallies' },
-        h(
-          'span',
-          null,
-          tree.count
-            ? `a push to ${nameOf(focus)} updates ${plural(tree.count, 'repo')} in ${plural(tree.depth, 'step')}`
-            : `a push to ${nameOf(focus)} updates nothing yet`
-        ),
-        ['updated', 'failed', 'running', 'queued'].filter((k) => tally.get(k)).map((k) => h('span', { class: LOOK[k].cls }, `${tally.get(k)} ${k}`))
       )
-    );
+    ];
   }
 
+  /** What j/k walk through in the map: every repo, band by band, column by column. */
+  let mapOrder = [];
+
   function mapView() {
+    const g = graph();
     const ls = states();
+    const pushes = lastPushes(app.status, st.history);
     const from = st.connectFrom;
+    const layout = mapLayout(g, { row: MAP.row, gap: MAP.gap, head: MAP.bandHead, bandGap: MAP.bandGap });
+    const selEdge = st.selection?.type === 'edge' ? edgeById(st.selection.id) : null;
+    const selNode = st.selection?.type === 'node' ? st.selection.id : null;
+    const placed = g.nodes.filter((n) => layout.column.has(n.id));
+    const { band, column, y } = layout;
+    mapOrder = placed.map((n) => n.id).sort((a, b) => band.get(a) - band.get(b) || column.get(a) - column.get(b) || y.get(a) - y.get(b));
+
+    // A band named after a scope leaves it out of its repos' names; the tooltip has the full name.
+    const label = (id) => {
+      const scope = layout.bands[band.get(id)].label;
+      const prefix = scope && /^@[^/]+$/.test(scope) ? `${scope}/` : null;
+      return prefix && nameOf(id).startsWith(prefix) ? nameOf(id).slice(prefix.length) : nameOf(id);
+    };
+    /** The second line of a box: the state of the link into it, or a source's last push. */
+    const line = new Map(
+      placed.map((node) => {
+        const lead = leadInto(node.id, ls);
+        if (!lead) {
+          const push = pushes.get(node.name);
+          return [node.id, { kind: null, text: push ? `pushed ${ago(push.ts)}` : 'no push seen' }];
+        }
+        const state = ls.get(lead.id);
+        const kind = state?.kind || 'none';
+        return [node.id, { kind, text: `${LOOK[kind].word}${when(state) ? ` ${when(state)}` : ''}` }];
+      })
+    );
+
+    // A column is as wide as its longest name or status line, within limits.
+    const need = (id) => Math.max(label(id).length * MAP.char, (line.get(id).text.length + (line.get(id).kind ? 2 : 0)) * MAP.subChar);
+    const colLeft = [];
+    const colWidth = [];
+    let x = 0;
+    layout.columns.forEach((ids, c) => {
+      colLeft[c] = x;
+      colWidth[c] = Math.max(MAP.minWidth, Math.min(MAP.maxWidth, Math.ceil(Math.max(0, ...ids.map(need))) + 20));
+      x += colWidth[c] + MAP.columnGap;
+    });
+    const width = Math.max(0, x - MAP.columnGap);
+    const height = MAP.head + layout.height;
+    const left = (id) => colLeft[column.get(id)];
+    const right = (id) => left(id) + colWidth[column.get(id)];
+    const mid = (id) => MAP.head + y.get(id);
+
+    const titles = layout.columns.map((ids, c) => {
+      const linked = ids.filter((id) => layout.bands[band.get(id)].label !== null).length;
+      if (!linked) return null;
+      return h('span', { class: 'gtitle', style: `left: ${colLeft[c]}px; width: ${colWidth[c]}px` }, `${c ? `step ${c}` : 'sources'} · ${linked}`);
+    });
+    const bands = layout.bands.map((b) =>
+      h('span', { class: 'gband', style: `top: ${MAP.head + b.top}px; width: ${width}px` }, `${b.label ?? 'no links'} · ${plural(b.size, 'repo')}`)
+    );
+
+    const lines = g.edges
+      .filter((e) => column.has(e.source) && column.has(e.target))
+      .map((e) => {
+        const a = column.get(e.source);
+        const b = column.get(e.target);
+        const y1 = mid(e.source);
+        const y2 = mid(e.target);
+        let d;
+        let head;
+        if (b > a) {
+          const x1 = right(e.source);
+          const x2 = left(e.target);
+          const m = (x1 + x2) / 2;
+          d = `M${x1} ${y1}C${m} ${y1} ${m} ${y2} ${x2} ${y2}`;
+          head = `M${x2} ${y2}l-7 -3.5v7z`;
+        } else if (a === b) {
+          // Within a column the line loops out on the right, further out the further it goes, so loops stay apart.
+          const x1 = right(e.source);
+          const out = x1 + 10 + Math.min(20, Math.abs(y2 - y1) / 12);
+          d = `M${x1} ${y1}C${out} ${y1} ${out} ${y2} ${x1} ${y2}`;
+          head = `M${x1} ${y2}l7 -3.5v7z`;
+        } else {
+          // Back to an earlier column it leaves from the left.
+          const x1 = left(e.source);
+          const x2 = right(e.target);
+          d = `M${x1} ${y1}C${x1 - 22} ${y1} ${x2 + 22} ${y2} ${x2} ${y2}`;
+          head = `M${x2} ${y2}l7 -3.5v7z`;
+        }
+        const kind = ls.get(e.id)?.kind;
+        const state = ['running', 'failed', 'queued'].includes(kind) ? kind : '';
+        // The links of the selected repo stand out; a state keeps its colour.
+        const linked = selNode && (e.source === selNode || e.target === selNode) ? 'linked' : '';
+        const look = e.id === selEdge?.id ? 'selected' : linked || state;
+        // A negative delay keeps the running line flowing in step across re-renders.
+        const path = svg('path', { class: 'line', d, style: state === 'running' ? `animation-delay: -${Date.now() % 800}ms` : null });
+        return {
+          rank: LINE_RANK[look],
+          el: svg(
+            'g',
+            { class: ['gedge', state, linked, e.id === selEdge?.id ? 'selected' : ''].filter(Boolean).join(' ') },
+            path,
+            svg('path', { class: 'head', d: head }),
+            svg(
+              'path',
+              { class: 'hit', d, onclick: () => !from && select({ type: 'edge', id: e.id }) },
+              svg('title', null, `${nameOf(e.source)} → ${nameOf(e.target)}`)
+            )
+          )
+        };
+      })
+      .sort((p, q) => p.rank - q.rank)
+      .map((p) => p.el);
+
+    const boxes = placed.map((node) => {
+      const id = node.id;
+      const { kind, text } = line.get(id);
+      const state = ['running', 'failed', 'queued'].includes(kind) ? ` ${kind}` : '';
+      const end = selEdge && (selEdge.source === id || selEdge.target === id) ? ' end' : '';
+      return h(
+        'button',
+        {
+          class: `gnode${state}${end}${id === from ? ' from' : ''}`,
+          style: `left: ${left(id)}px; top: ${mid(id) - MAP.row / 2}px; width: ${colWidth[column.get(id)]}px; height: ${MAP.row}px`,
+          'aria-selected': String(!from && selNode === id),
+          title: from ? nameOf(id) : `${nameOf(id)}: double-click to open it in the tree`,
+          onclick: () => (from ? pickRepo(id) : select({ type: 'node', id })),
+          ondblclick: () => !from && focusOn(id)
+        },
+        h('span', { class: 'name' }, label(id)),
+        kind ? h('span', { class: `status ${LOOK[kind].cls}` }, glyph(kind), ` ${text}`) : h('span', { class: 'sub' }, text)
+      );
+    });
+
     return h(
       'div',
       { class: 'stack' },
@@ -579,37 +753,23 @@ export function create(root, app) {
             keyButton('esc', 'cancel', endConnect)
           )
         : null,
-      h('p', { class: 'dim' }, 'islands of linked repos. each row is one step further from the sources; pick a repo to focus it.'),
-      islands(graph()).map((island) =>
-        box(
-          `${island.label} · ${plural(island.ranks.flat().length, 'repo')}`,
-          'island',
-          island.ranks.map((nodes, n) =>
-            h(
-              'div',
-              { class: 'rank' },
-              h('span', { class: 'n' }, String(n)),
-              h(
-                'div',
-                { class: 'chips' },
-                nodes.map((node) => {
-                  const kind = nodeState(node.id, ls);
-                  return h(
-                    'button',
-                    {
-                      class: `chip${kind ? ` ${LOOK[kind].cls}` : ''}${node.id === from ? ' from' : ''}`,
-                      'aria-selected': String(!from && node.id === st.focus),
-                      onclick: () => pickRepo(node.id)
-                    },
-                    kind ? glyph(kind) : null,
-                    kind ? ' ' : null,
-                    node.name
-                  );
-                })
-              )
-            )
-          )
+      h(
+        'div',
+        { class: 'graph-scroll' },
+        h(
+          'div',
+          { class: 'graph', style: `width: ${width}px; height: ${height}px`, role: 'group', 'aria-label': 'Every repo and its links' },
+          titles,
+          bands,
+          svg('svg', { class: 'gedges', width, height, 'aria-hidden': 'true' }, lines),
+          boxes
         )
+      ),
+      h(
+        'div',
+        { class: 'graph-legend' },
+        ['updated', 'running', 'queued', 'failed'].map((k) => h('span', { class: LOOK[k].cls }, `${LOOK[k].glyph ?? SPIN[0]} ${LOOK[k].word}`)),
+        h('span', { class: 'grow' }, 'click a repo or a line to edit it · double-click or enter to open a repo in the tree')
       )
     );
   }
@@ -727,7 +887,7 @@ export function create(root, app) {
             from: 'built-in',
             show: show(key),
             options: options(key),
-            hint: key === 'commands' ? '{pkgs} is the packages to update' : HINTS[key],
+            hint: key === 'commands' ? 'one per line, run in order. {pkgs} is the packages to update' : HINTS[key],
             onChange: (v) => edit((r) => setDefaultsField(r, key, v))
           }),
         (key) => defaultsFor(key).value,
@@ -805,7 +965,7 @@ export function create(root, app) {
         h('span', { class: 'title' }, node.name),
         h('span', { class: 'dim' }, node.path),
         repoFacts(node),
-        node.id !== st.focus || st.mode !== 'focus' ? h('div', { class: 'row' }, keyButton('⏎', `focus ${node.name}`, () => focusOn(node.id))) : null
+        node.id !== st.focus || st.mode !== 'tree' ? h('div', { class: 'row' }, keyButton('⏎', `focus ${node.name}`, () => focusOn(node.id))) : null
       ),
       repo
         ? box(
@@ -827,7 +987,7 @@ export function create(root, app) {
               inherited: defaultsFor('branches').value,
               from: defaultsFor('branches').from,
               show: (v) => (Array.isArray(v) && v.length ? v.join('\n') : 'its default branch'),
-              hint: 'pushes to these branches trigger updates',
+              hint: 'pushes to these branches trigger updates, one per line',
               onChange: (v) => edit((r) => setRepoField(r, node.repoIndex, 'branches', v))
             }),
             field({
@@ -863,7 +1023,7 @@ export function create(root, app) {
     const failure = failureOf(edge);
     const pkg = linkOf(edge);
     const pkgs = st.check.pkgs?.[edge.target] || [];
-    const command = `$ ${String(effective(edge, 'commands')?.[0] ?? '').replace('{pkgs}', pkgs.join(' '))}`;
+    const commands = (effective(edge, 'commands') ?? []).map((c) => `$ ${String(c).replace('{pkgs}', pkgs.join(' '))}`).join('\n');
     const retrying = app.busy && app.busyCommand === 'retry';
     const { repoIndex, packageIndex } = edge;
 
@@ -882,7 +1042,7 @@ export function create(root, app) {
         )
       );
     } else if (state?.kind === 'running') {
-      live = box(['running ', duration(Date.now() - state.ts)], 'busy tinted', h('span', { class: 'muted' }, command), h('div', { class: 'row' }, keyButton('2', 'follow it in activity', () => app.go('activity'))));
+      live = box(['running ', duration(Date.now() - state.ts)], 'busy tinted', h('pre', { class: 'muted' }, commands), h('div', { class: 'row' }, keyButton('2', 'follow it in activity', () => app.go('activity'))));
     } else if (state?.kind === 'queued') {
       live = h('p', { class: 'notice' }, `· queued: it runs after the update in progress`);
     }
@@ -916,7 +1076,12 @@ export function create(root, app) {
           from: inherited.from,
           show: show(key),
           options: options(key),
-          hint: key === 'commands' ? (pkgs.length ? `{pkgs} = ${pkgs.join(' ')}` : '{pkgs} is the packages to update') : key === 'branches' ? 'source branches to react to' : HINTS[key],
+          hint:
+            key === 'commands'
+              ? `one per line, run in order. ${pkgs.length ? `{pkgs} = ${pkgs.join(' ')}` : '{pkgs} is the packages to update'}`
+              : key === 'branches'
+                ? 'source branches to react to, one per line'
+                : HINTS[key],
           onChange: (v) => edit((r) => setLinkField(r, repoIndex, packageIndex, key, v))
         });
       }, (key) => effective(edge, key)),
@@ -961,8 +1126,9 @@ export function create(root, app) {
 
   // ---- keys ----------------------------------------------------------------------
 
-  /** Rows of the focus tree in order, the focused repo first. */
+  /** What j/k walk through: every repo of the map, or the focused repo and the rows of the tree. */
   function rowSelections() {
+    if (st.mode === 'map') return mapOrder.map((id) => ({ type: 'node', id }));
     if (!st.focus) return [];
     return [{ type: 'node', id: st.focus }, ...cascade(graph(), st.focus).rows.map((r) => ({ type: 'edge', id: r.edge.id }))];
   }
@@ -1000,7 +1166,7 @@ export function create(root, app) {
         search.focus();
         return true;
       case 'm':
-        setMode(st.mode === 'map' ? 'focus' : 'map');
+        setMode(st.mode === 'map' ? 'tree' : 'map');
         return true;
       case 'a':
         addRepo();
@@ -1031,19 +1197,21 @@ export function create(root, app) {
         return true;
       case 'Enter':
         if (st.selection?.type === 'edge' && sel) focusOn(sel.target);
-        else if (st.selection?.type === 'node' && sel && sel.id !== st.focus) focusOn(sel.id);
+        else if (st.selection?.type === 'node' && sel && (st.mode === 'map' || sel.id !== st.focus)) focusOn(sel.id);
         return !!sel;
       case 'j':
       case 'k':
       case 'ArrowDown':
       case 'ArrowUp': {
-        if (st.mode !== 'focus') return false;
+        if (st.connectFrom) return false;
         const list = rowSelections();
-        const i = list.findIndex((s) => st.selection && s.type === st.selection.type && s.id === st.selection.id);
+        // In the map, a selected link stands for the repo it goes into.
+        const into = st.mode === 'map' && st.selection?.type === 'edge' ? edgeById(st.selection.id)?.target : undefined;
+        const i = list.findIndex((s) => st.selection && ((s.type === st.selection.type && s.id === st.selection.id) || (into && s.id === into)));
         const down = e.key === 'j' || e.key === 'ArrowDown';
         const next = list[Math.max(0, Math.min(list.length - 1, i < 0 ? 0 : i + (down ? 1 : -1)))];
-        if (next) select(next);
-        content.querySelector('.table-row[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+        if (next) select({ type: next.type, id: next.id });
+        content.querySelector('.table-row[aria-selected="true"], .gnode[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         return true;
       }
       default:
@@ -1055,7 +1223,7 @@ export function create(root, app) {
   loadHistory();
 
   return {
-    hints: 'j/k move · enter focus · / search · m map · s save',
+    hints: 'j/k move · enter focus · / search · m map or tree · s save',
     onKey,
     async onChanged(what) {
       if (what === 'journal') loadHistory();

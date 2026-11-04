@@ -9,15 +9,15 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const APP_BIN = fileURLToPath(new URL('../../bin/updeps-app.js', import.meta.url));
+export const APP_BIN = fileURLToPath(new URL('../../bin/updeps-gui.js', import.meta.url));
 export const APP_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
-const AGENT_ID = 'com.sqaft.updeps.app';
+const AGENT_ID = 'com.sqaft.updeps.gui';
 const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${AGENT_ID}.plist`);
 const DESKTOP_FILE = path.join(
   process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
   'autostart',
-  'sqaft-updeps-app.desktop'
+  'sqaft-updeps-gui.desktop'
 );
 
 const xml = (s) =>

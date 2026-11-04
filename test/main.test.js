@@ -11,7 +11,7 @@ import { renderAppPlist, renderDesktopEntry } from '../src/main/autostart.js';
 import { watchFiles } from '../src/main/watch.js';
 
 const isWindows = process.platform === 'win32';
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'updeps-app-test-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'updeps-gui-test-'));
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 /** A fake CLI package with an API module. */
@@ -81,15 +81,15 @@ test('findExecutable and mergePaths', () => {
 });
 
 test('login entries run node through the saved PATH with --hidden, escaped', () => {
-  const plist = renderAppPlist({ bin: '/a & b/bin/updeps-app.js', pathEnv: '/x:/y' });
-  assert.match(plist, /<string>\/usr\/bin\/env<\/string>\s*<string>node<\/string>\s*<string>\/a &amp; b\/bin\/updeps-app\.js<\/string>\s*<string>--hidden<\/string>/);
+  const plist = renderAppPlist({ bin: '/a & b/bin/updeps-gui.js', pathEnv: '/x:/y' });
+  assert.match(plist, /<string>\/usr\/bin\/env<\/string>\s*<string>node<\/string>\s*<string>\/a &amp; b\/bin\/updeps-gui\.js<\/string>\s*<string>--hidden<\/string>/);
   assert.match(plist, /<key>PATH<\/key>\s*<string>\/x:\/y<\/string>/);
 
-  const entry = renderDesktopEntry({ bin: '/home/me/app "x"/bin/updeps-app.js', pathEnv: '/a:/b 100%' });
+  const entry = renderDesktopEntry({ bin: '/home/me/app "x"/bin/updeps-gui.js', pathEnv: '/a:/b 100%' });
   const exec = /^Exec=(.*)$/m.exec(entry)[1];
   assert.equal(
     exec,
-    '"/usr/bin/env" "PATH=/a:/b 100%%" "node" "/home/me/app \\\\"x\\\\"/bin/updeps-app.js" "--hidden"'
+    '"/usr/bin/env" "PATH=/a:/b 100%%" "node" "/home/me/app \\\\"x\\\\"/bin/updeps-gui.js" "--hidden"'
   );
 });
 

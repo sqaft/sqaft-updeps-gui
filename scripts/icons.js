@@ -131,11 +131,11 @@ const hex = (h, alpha = 1) => [
 ];
 
 // Palette (matches the renderer's tokens in src/renderer/styles.css).
-const INK = '#1E1C18';
-const PAPER = '#ECE6D8';
-const AMBER = '#FFB547';
+const INK = '#1A1E23';
+const PAPER = '#E3E7ED';
+const AMBER = '#F0B45A';
 const RED = '#D9442F';
-const STOPPED = '#8C8576';
+const STOPPED = '#7C8592';
 const WHITE = '#FFFFFF';
 
 function write(name, png) {

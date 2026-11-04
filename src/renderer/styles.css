@@ -1,6 +1,6 @@
-/* updeps: a terminal-style panel. Everything is set in a monospace face;
-   sections are boxes with their title on the border, and a statusline runs
-   along the bottom. Colour means state and nothing else: amber is a running
+/* updeps: a terminal-style panel in a single dark theme. Everything is set
+   in a monospace face; sections are boxes with their title on the border,
+   and a statusline runs along the bottom. Colour means state and nothing else: amber is a running
    or queued update, red an open failure, green an update that went through.
    A selection is inverted text. */
 
@@ -25,87 +25,46 @@
 }
 
 :root {
-  --bg: #f6f3ec;
-  --panel: #efebe2;
-  --raised: #e7e2d6;
-  --line: #ddd7ca;
-  --line-2: #ccc4b4;
-  --text: #1f1d19;
-  --muted: #5c5548;
-  --dim: #6e6658;
-  --tree: #a39a88;
-  --key: #8a5700;
-  --amber: #8a5700;
-  --queued: #8a5700;
-  --red: #b3261e;
-  --red-line: #d9a39b;
-  --green: #3d7317;
-  --sel-bg: #1f1d19;
-  --sel-fg: #f6f3ec;
-  --sel-dim: #b8b0a0;
-  --sel-red: #ff8a78;
-  --sel-key: #ffb547;
-  --run-bg: #f5e6c4;
-  --fail-bg: #f8e3de;
-  --input: #fbf9f4;
-  --set-line: #8a8170;
-  --bar-bg: #e3ddd0;
-  --bar-text: #3a362f;
-  --bar-sep: #ccc4b4;
-  --ok-bg: #3d7317;
-  --ok-fg: #f6f3ec;
-  --warn-bg: #8a5700;
-  --warn-fg: #f6f3ec;
-  --off-bg: #a39a88;
-  --off-fg: #1f1d19;
-  --code: #3a362f;
-  --shadow: rgba(60, 50, 30, 0.18);
+  --bg: #0e1013;
+  --panel: #13161a;
+  --raised: #1a1e23;
+  --line: #22272e;
+  --line-2: #2d333b;
+  --text: #e3e7ed;
+  --muted: #a2abb7;
+  --dim: #7c8592;
+  --tree: #4c5562;
+  --key: #f0b45a;
+  --amber: #f0b45a;
+  --queued: #c99a52;
+  --red: #f2705f;
+  --red-line: #7c3a33;
+  --green: #8ccf72;
+  --sel-bg: #e3e7ed;
+  --sel-fg: #0e1013;
+  --sel-dim: #4a525d;
+  --sel-red: #b3261e;
+  --sel-key: #8a5a00;
+  --run-bg: #1c1a13;
+  --fail-bg: #211517;
+  --input: #0e1013;
+  --set-line: #59626e;
+  --bar-bg: #1a1e23;
+  --bar-text: #c4cbd4;
+  --bar-sep: #2d333b;
+  --ok-bg: #8ccf72;
+  --ok-fg: #0e1013;
+  --warn-bg: #f0b45a;
+  --warn-fg: #0e1013;
+  --off-bg: #4c5562;
+  --off-fg: #e3e7ed;
+  --code: #c4cbd4;
+  --shadow: rgba(0, 0, 0, 0.55);
 
   --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   --display: 'Martian Mono', 'JetBrains Mono', ui-monospace, monospace;
   --box-bg: var(--bg);
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12110f;
-    --panel: #171613;
-    --raised: #1e1c18;
-    --line: #26241f;
-    --line-2: #322f29;
-    --text: #ece6d8;
-    --muted: #a79f8e;
-    --dim: #8c8576;
-    --tree: #5e584d;
-    --key: #ffb547;
-    --amber: #ffb547;
-    --queued: #d9a24e;
-    --red: #ff6f5b;
-    --red-line: #8a3328;
-    --green: #a6d96a;
-    --sel-bg: #ece6d8;
-    --sel-fg: #12110f;
-    --sel-dim: #4a453c;
-    --sel-red: #b3261e;
-    --sel-key: #8a5a00;
-    --run-bg: #1f1a10;
-    --fail-bg: #211411;
-    --input: #12110f;
-    --set-line: #6b6455;
-    --bar-bg: #26241f;
-    --bar-text: #c9c1af;
-    --bar-sep: #3a362f;
-    --ok-bg: #a6d96a;
-    --ok-fg: #12110f;
-    --warn-bg: #ffb547;
-    --warn-fg: #12110f;
-    --off-bg: #5e584d;
-    --off-fg: #ece6d8;
-    --code: #c9c1af;
-    --shadow: rgba(0, 0, 0, 0.55);
-    color-scheme: dark;
-  }
+  color-scheme: dark;
 }
 
 /* ---- base ----------------------------------------------------------------- */
@@ -370,12 +329,20 @@ textarea::placeholder {
   min-height: 0;
 }
 .nav {
-  flex: 0 0 176px;
+  position: relative;
+  flex: 0 0 var(--w, 176px);
+  display: flex;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+.nav-body {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 16px 10px;
-  border-right: 1px solid var(--line);
+  padding: 16px 10px 10px;
+  overflow: hidden;
 }
 .nav .brand {
   display: flex;
@@ -444,6 +411,67 @@ textarea::placeholder {
   color: var(--sel-key);
 }
 
+/* Folding the side panels: `[` the menu, `]` the details panel on the right.
+   Each toggle holds the text for both states; the body class picks one. */
+.fold {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.fold:hover {
+  color: var(--text);
+}
+.fold .folded,
+body.nav-folded .nav .fold .open,
+body.side-folded .side-panel .fold .open {
+  display: none;
+}
+body.nav-folded .nav .fold .folded,
+body.side-folded .side-panel .fold .folded {
+  display: inline;
+}
+.nav .fold {
+  margin-top: auto;
+}
+body.nav-folded .nav {
+  flex-basis: 52px;
+}
+body.nav-folded .nav-body {
+  padding-inline: 6px;
+}
+body.nav-folded .nav .brand {
+  justify-content: center;
+  padding: 0;
+}
+body.nav-folded .nav .brand .word,
+body.nav-folded .nav a .label,
+body.nav-folded .nav a .badges {
+  display: none;
+}
+body.nav-folded .nav a {
+  justify-content: center;
+  padding: 0;
+}
+body.nav-folded .nav a .num {
+  color: inherit;
+}
+body.nav-folded .nav a .num.fail {
+  color: var(--red);
+}
+body.nav-folded .nav a .num.busy {
+  color: var(--amber);
+}
+body.nav-folded .nav .fold {
+  justify-content: center;
+  padding: 0;
+}
+
 .view {
   flex: 1;
   min-width: 0;
@@ -509,19 +537,80 @@ textarea::placeholder {
   gap: 8px;
 }
 .side-panel {
-  flex: 0 0 360px;
-  overflow: auto;
+  position: relative;
+  flex: 0 0 var(--w, 360px);
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 22px 16px 24px;
+  min-width: 0;
+  min-height: 0;
   background: var(--panel);
   border-left: 1px solid var(--line);
   --box-bg: var(--panel);
 }
 .side-panel.wide {
-  flex-basis: 470px;
+  flex-basis: var(--w, 470px);
+}
+.side-panel > .fold {
+  flex: none;
+  align-self: flex-end;
+  margin: 6px 8px 0;
+}
+.side-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 10px 16px 24px;
+}
+.side-panel.wide .side-body {
   gap: 16px;
+}
+body.side-folded .side-panel {
+  flex-basis: 34px;
+}
+body.side-folded .side-body,
+body.side-folded .side-panel > .resizer,
+body.nav-folded .nav > .resizer {
+  display: none;
+}
+
+/* A panel's inner edge drags its width (`--w` on the panel). */
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.resizer.right {
+  right: -4px;
+}
+.resizer.left {
+  left: -4px;
+}
+.resizer:hover,
+.resizer.active {
+  background: linear-gradient(var(--key), var(--key)) center / 1px 100% no-repeat;
+}
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.side-folded .side-panel > .fold {
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-self: stretch;
+  height: auto;
+  margin: 0;
+  padding: 14px 0;
+}
+body.side-folded .side-panel > .fold .folded:not(.key) {
+  writing-mode: vertical-rl;
 }
 
 /* A box with its title on the border. */
@@ -586,6 +675,18 @@ textarea::placeholder {
 .facts dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+/* In the side panel each fact is its label above its value. */
+.side-panel .facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.side-panel .facts dt {
+  font-size: 11.5px;
+}
+.side-panel .facts dd + dt {
+  margin-top: 6px;
 }
 pre.output {
   padding: 8px 10px;
@@ -822,51 +923,184 @@ pre.output {
   gap: 6px 18px;
   color: var(--muted);
 }
-.island {
-  gap: 6px;
-  padding-top: 18px;
+/* The map: boxes placed by views/dependencies.js, joined by lines drawn under them. */
+.graph-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+  /* Its width comes from the page, not the map, so a wide map scrolls here instead of widening the window's content. */
+  contain: inline-size;
 }
-.rank {
+.graph {
+  position: relative;
+}
+.gtitle {
+  position: absolute;
+  top: 0;
+  color: var(--dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+/* An island's title, with a rule across the map. */
+.gband {
+  position: absolute;
+  left: 0;
+  height: 18px;
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 11px;
+  white-space: nowrap;
 }
-.rank > .n {
-  flex: none;
-  width: 16px;
+.gband::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--line-2);
+}
+.gedges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.gedge {
   color: var(--tree);
 }
-.rank > .chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
+.gedge .line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
-.chip {
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid var(--line-2);
-  background: transparent;
+.gedge .head {
+  fill: currentColor;
+}
+/* A wider, invisible copy of each line takes the clicks. */
+.gedge .hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.gedge:hover {
+  color: var(--dim);
+}
+/* The links of the selected repo; a running, failed or queued one keeps its colour. */
+.gedge.linked {
+  color: var(--muted);
+}
+.gedge.linked .line {
+  stroke-width: 1.75;
+}
+.gedge.queued .line {
+  stroke-dasharray: 3 4;
+}
+.gedge.failed {
+  color: var(--red-line);
+}
+.gedge.running {
+  color: var(--amber);
+}
+.gedge.running .line {
+  stroke-width: 1.75;
+  stroke-dasharray: 5 3;
+  animation: flow 0.8s linear infinite;
+}
+.gedge.selected {
   color: var(--text);
 }
-.chip.s-running {
+.gedge.selected .line {
+  stroke-width: 2.25;
+}
+@keyframes flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gedge.running .line {
+    animation: none;
+  }
+}
+.gnode {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+}
+.gnode:hover {
+  border-color: var(--dim);
+}
+.gnode > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.gnode .name {
+  font-size: 12px;
+}
+.gnode .sub,
+.gnode .status {
+  font-size: 11px;
+}
+.gnode .sub {
+  color: var(--muted);
+}
+.gnode.running {
   border-color: var(--amber);
+  background: var(--run-bg);
 }
-.chip.s-failed {
+.gnode.failed {
   border-color: var(--red-line);
+  background: var(--fail-bg);
 }
-.chip.s-queued {
+.gnode.queued {
   border-style: dashed;
   border-color: var(--queued);
 }
-.chip.from {
+.gnode.end {
+  border-color: var(--text);
+}
+.gnode.from {
   border-color: var(--key);
+  background: var(--raised);
+}
+.gnode.from .name {
   font-weight: 700;
 }
-.chip[aria-selected='true'] {
+.gnode[aria-selected='true'] {
+  border-style: solid;
   border-color: var(--sel-bg);
   background: var(--sel-bg);
   color: var(--sel-fg);
-  font-weight: 700;
+  font-weight: 500;
+}
+.gnode[aria-selected='true'] .sub {
+  color: var(--sel-dim);
+}
+.gnode[aria-selected='true'] .status:not(.s-failed) {
+  color: var(--sel-fg);
+}
+.gnode[aria-selected='true'] .s-failed {
+  color: var(--sel-red);
+}
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.graph-legend .grow {
+  margin-left: auto;
 }
 .savebar {
   display: flex;
@@ -895,15 +1129,13 @@ pre.output {
   max-width: 520px;
 }
 
-/* Inspector fields. */
+/* Inspector fields: the label above its value. */
 .field {
-  display: grid;
-  grid-template-columns: 124px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .field > .label {
-  padding-top: 3px;
   color: var(--muted);
   white-space: pre;
 }
@@ -945,6 +1177,7 @@ pre.output {
 }
 .field textarea {
   resize: vertical;
+  overflow-x: auto;
 }
 .field .options {
   display: flex;

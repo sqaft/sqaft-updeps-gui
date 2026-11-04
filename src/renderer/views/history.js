@@ -1,6 +1,6 @@
 // Every update from the journal, grouped by the push that started it, and one
 // push in full: each update's commands, commit, files and output.
-import { h, mount, box, keyButton, glyph, spinner, LOOK, shortTime, typing, plural } from '../dom.js';
+import { h, mount, box, keyButton, glyph, spinner, LOOK, shortTime, typing, plural, sidePanel } from '../dom.js';
 import { duration } from '/shared/status.js';
 
 const SPANS = [
@@ -46,7 +46,7 @@ export function create(root, app) {
   const count = h('span', { class: 'count' });
   const list = h('div', { class: 'groups', 'aria-label': 'Updates' });
   const scroll = h('div', { class: 'scroll' }, list);
-  const detail = h('aside', { class: 'side-panel wide', 'aria-label': 'Push' });
+  const { el: panel, body: detail } = sidePanel({ label: 'Push', wide: true });
 
   root.append(
     h(
@@ -58,7 +58,7 @@ export function create(root, app) {
         h('div', { class: 'toolbar' }, filters, h('label', { class: 'prompt grow' }, h('span', { class: 'key' }, '›'), queryInput, h('span', { class: 'hint' }, '/ filter')), count),
         scroll
       ),
-      detail
+      panel
     )
   );
 

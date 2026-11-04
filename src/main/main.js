@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, Menu, dialog } from 'electron';
+import { app, BrowserWindow, Menu, dialog, nativeTheme } from 'electron';
 import { locateCli, loginShellPath, mergePaths, runCli } from './cli.js';
 import { registerScheme, handleProtocol, createWindow } from './window.js';
 import { registerIpc } from './ipc.js';
@@ -11,6 +11,8 @@ import * as autostart from './autostart.js';
 
 registerScheme();
 app.setName('updeps');
+// The page has a single, dark theme; the window's own parts (scrollbars, dialogs) match it.
+nativeTheme.themeSource = 'dark';
 
 const isMac = process.platform === 'darwin';
 

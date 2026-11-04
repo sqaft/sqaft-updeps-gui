@@ -13,12 +13,15 @@ function describe(value) {
 }
 
 const copy = (v) => (Array.isArray(v) ? [...v] : v);
+
+/** A list field shows every line and one empty line for the next entry, at least two. */
+const listRows = (text) => Math.max(2, Math.min(12, text.split('\n').length + (text.endsWith('\n') ? 0 : 1)));
 const empty = (v) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
 
 let seq = 0;
 
 /**
- * A form field bound to one config key, as a `label  value` row. An unset key
+ * A form field bound to one config key, its label above its value. An unset key
  * inherits: its inherited value shows dimmed in a dashed box with where it
  * comes from, and clicking it sets a value here, starting from the inherited
  * one. A value set here is marked `*` and has "reset to inherited". On, off
@@ -81,13 +84,15 @@ export function field(o) {
         if (inherits && value === undefined) render();
       },
       oninput: (e) => {
+        if (o.kind === 'lines') e.target.rows = listRows(e.target.value);
         change(parse(e.target.value));
         wrap.firstChild.replaceWith(label());
       }
     };
     if (o.kind === 'lines') {
-      const lines = Array.isArray(value) ? value : [];
-      return h('textarea', { ...attrs, rows: Math.max(1, Math.min(6, lines.length || 1)), value: lines.join('\n') });
+      // One entry per line: long lines scroll instead of wrapping, so a wrapped line never reads as two entries.
+      const text = (Array.isArray(value) ? value : []).join('\n');
+      return h('textarea', { ...attrs, wrap: 'off', rows: listRows(text), value: text });
     }
     return h('input', { ...attrs, type: o.kind === 'number' ? 'number' : 'text', min: o.kind === 'number' ? 0 : null, value: value ?? '' });
   }

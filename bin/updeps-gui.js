@@ -6,11 +6,11 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-const USAGE = `updeps-app — desktop app for updeps
+const USAGE = `updeps-gui — desktop app for updeps
 
 USAGE
-  updeps-app [--hidden] [--foreground]
-  updeps-app --prepare
+  updeps-gui [--hidden] [--foreground]
+  updeps-gui --prepare
 
 OPTIONS
   --hidden       start in the system tray without opening the window

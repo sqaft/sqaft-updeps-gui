@@ -1,4 +1,4 @@
-import { h, mount, stripAnsi, SPIN, spinner, typing, plural, keyButton } from './dom.js';
+import { h, mount, stripAnsi, SPIN, spinner, typing, plural, keyButton, restoreFolds, toggleFold, resizer } from './dom.js';
 import { summarize, ago } from '/shared/status.js';
 import * as dependenciesView from './views/dependencies.js';
 import * as activityView from './views/activity.js';
@@ -63,7 +63,9 @@ let current = null;
 let currentName = null;
 let serviceCheckedAt = 0;
 
-const nav = document.getElementById('nav');
+// The menu is drawn into its body; the handle that drags its width stays outside it.
+const nav = h('div', { class: 'nav-body' });
+document.getElementById('nav').append(nav, resizer(document.getElementById('nav'), { key: 'nav', edge: 'right', min: 150, max: () => 320 }));
 const viewRoot = document.getElementById('view');
 const drawer = document.getElementById('drawer');
 const statusline = document.getElementById('statusline');
@@ -98,17 +100,20 @@ function renderNav() {
   const { failures, running, queued } = counts();
   mount(
     nav,
-    h('div', { class: 'brand' }, 'updeps', h('span', { class: 'cursor', 'aria-hidden': 'true' })),
+    h('div', { class: 'brand' }, h('span', { class: 'word' }, 'updeps'), h('span', { class: 'cursor', 'aria-hidden': 'true' })),
     h(
       'div',
       { class: 'links' },
-      NAMES.map((name, i) =>
-        h(
+      NAMES.map((name, i) => {
+        const activity = name === 'activity';
+        // A folded menu shows only the numbers; activity's then takes the colour of its badges.
+        const tone = activity && failures ? ' fail' : activity && (running || queued) ? ' busy' : '';
+        return h(
           'a',
-          { href: `#${name}`, 'aria-current': name === currentName ? 'page' : null },
-          h('span', { class: 'num' }, String(i + 1)),
-          VIEWS[name].label,
-          name === 'activity' && (failures || running || queued)
+          { href: `#${name}`, 'aria-current': name === currentName ? 'page' : null, title: VIEWS[name].label },
+          h('span', { class: `num${tone}` }, String(i + 1)),
+          h('span', { class: 'label' }, VIEWS[name].label),
+          activity && (failures || running || queued)
             ? h(
                 'span',
                 { class: 'badges' },
@@ -116,8 +121,14 @@ function renderNav() {
                 running || queued ? h('span', { class: 'busy', title: `${running} running, ${queued} queued` }, `◐${running + queued}`) : null
               )
             : null
-        )
-      )
+        );
+      })
+    ),
+    h(
+      'button',
+      { type: 'button', class: 'fold', title: 'Fold or unfold the menu ([)', onclick: () => toggleFold('nav') },
+      h('span', { class: 'key' }, '['),
+      h('span', { class: 'open' }, 'hide menu')
     )
   );
 }
@@ -147,7 +158,7 @@ function renderStatusline() {
           h('button', { onclick: () => app.run(['restart']), disabled: app.busy, title: 'Restart the daemon to load it' }, 'R restart')
         )
       : null,
-    h('span', { class: 'hints' }, current?.hints || '1–5 switch views'),
+    h('span', { class: 'hints' }, `${current?.hints || '1–5 switch views'} · [ ] panels`),
     h('span', { class: 'version' }, app.ctx?.cli ? `updeps ${app.ctx.cli.version}` : 'updeps')
   );
 }
@@ -275,6 +286,9 @@ function onKey(e) {
   if (Number.isInteger(index) && NAMES[index]) {
     e.preventDefault();
     go(NAMES[index]);
+  } else if (e.key === '[' || e.key === ']') {
+    e.preventDefault();
+    toggleFold(e.key === '[' ? 'nav' : 'side');
   } else if (e.key === 'R' && app.status?.daemon.running && !app.busy) {
     e.preventDefault();
     app.run(['restart']);
@@ -291,6 +305,7 @@ setInterval(() => {
 }, 100);
 
 async function boot() {
+  restoreFolds();
   app.ctx = await api.context();
   api.on('changed', onChanged);
   api.on('navigate', ({ view, selector }) => go(view, selector));

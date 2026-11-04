@@ -1,5 +1,5 @@
 {
-  "name": "@sqaft/updeps-app",
+  "name": "@sqaft/updeps-gui",
   "version": "0.0.1",
   "description": "Desktop app for updeps: edit the dependency graph and see the daemon's status and failures in the system tray. macOS, Linux and Windows.",
   "keywords": [
@@ -12,20 +12,20 @@
     "electron",
     "desktop"
   ],
-  "homepage": "https://github.com/sqaft/sqaft-updeps-app#readme",
+  "homepage": "https://github.com/sqaft/sqaft-updeps-gui#readme",
   "bugs": {
-    "url": "https://github.com/sqaft/sqaft-updeps-app/issues"
+    "url": "https://github.com/sqaft/sqaft-updeps-gui/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sqaft/sqaft-updeps-app.git"
+    "url": "git+https://github.com/sqaft/sqaft-updeps-gui.git"
   },
   "author": "sqaft",
   "license": "MIT",
   "type": "module",
   "main": "src/main/main.js",
   "bin": {
-    "updeps-app": "bin/updeps-app.js"
+    "updeps-gui": "bin/updeps-gui.js"
   },
   "files": [
     "bin/",
